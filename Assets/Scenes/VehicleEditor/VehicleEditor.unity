@@ -147,6 +147,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7d8818134e313b745968fb2fe4d5cea2, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  notes: "Did you make sure your new part \n- doesn't have nested children?\n- is
+    1x scale?"
+  SymmetryCount: 3
+  Symmetry: 0
   parts:
   - {fileID: 5745818522619893708, guid: 9b77aea95cf3c434d94e279649152d54, type: 3}
   - {fileID: 8128033632114004202, guid: 0c6e6e9cc45669d4fa2074fc3d8e024b, type: 3}

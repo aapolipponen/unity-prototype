@@ -18,4 +18,8 @@ public struct EditSystemData : IComponentData {
     public quaternion SnapRotation;
     public bool WasAgainstPartBeforeSnapping;
     public float3 LastGhostPositionBeforeSnap;
+
+    // Variables Added For Symmetry
+    public int SymmetryCount;
+    public bool IsSymmetryModeParent;
 }

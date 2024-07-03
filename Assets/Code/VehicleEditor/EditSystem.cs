@@ -3,7 +3,7 @@ using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Physics;
 using Unity.Transforms;
-using Debug = UnityEngine.Debug;
+using UnityEngine;
 
 /// <summary>
 /// Primary system for vehicle editor - placing, deleting, etc
@@ -16,6 +16,7 @@ using Debug = UnityEngine.Debug;
 /// </summary>
 partial class EditSystem : SystemBase {
     private const float SNAP_DISTANCE = .5f;
+    int lastID = 1; // Each time parts are placed (dont matter how many, if it is just in 1 click) they all have the same ID
 
     // vehicle is made up of parts
 
@@ -37,7 +38,7 @@ partial class EditSystem : SystemBase {
         var state = SystemAPI.GetSingleton<EditSystemData>();
 
         RaycastInput raycast = GetCameraRaycast(out float3 clickDirection);
-        bool hitPart = GetPartFrom(raycast, out RaycastHit hitInfo, out Entity parentPart);
+        bool hitPart = GetPartFrom(raycast, out Unity.Physics.RaycastHit hitInfo, out Entity parentPart);
 
         if (input.Summon.WasPressedThisFrame()) {
             SetupPlacementGhost(ref actionQueue);
@@ -50,9 +51,10 @@ partial class EditSystem : SystemBase {
 
             // derive where ghost should be
             if (hitPart) { // against part surface
+                Debug.Log(parentPart.Index);
                 placeTransform = new LocalTransform {
                     Position = hitInfo.Position,
-                    Rotation = quaternion.LookRotationSafe(hitInfo.SurfaceNormal, new(0, 1, 0)),
+                    Rotation = quaternion.LookRotationSafe(hitInfo.SurfaceNormal, new float3(0, 1, 0)),
                     Scale = 1
                 };
                 var offsetDirection = placeTransform.InverseTransformDirection(hitInfo.SurfaceNormal);
@@ -75,7 +77,7 @@ partial class EditSystem : SystemBase {
 
                 placeTransform = new LocalTransform {
                     Position = snapTransform.Position,
-                    Rotation = quaternion.LookRotationSafe(snapTransform.Up, new(0, 1, 0)),
+                    Rotation = quaternion.LookRotationSafe(snapTransform.Up, new float3(0, 1, 0)),
                     Scale = 1
                 };
                 var offsetDirection = placeTransform.InverseTransformDirection(snapTransform.Up);
@@ -106,7 +108,29 @@ partial class EditSystem : SystemBase {
             actionQueue.SetComponent(placementGhost, placeTransform);
 
             if (input.Place.WasPressedThisFrame()) {
-                PlacePart(ref actionQueue, SystemAPI.GetSingletonBuffer<PartsBuffer>()[state.SelectedPart].Value, placeTransform, hitPart ? parentPart : Entity.Null);
+                var partPrefab = SystemAPI.GetSingletonBuffer<PartsBuffer>()[state.SelectedPart].Value;
+                
+                if (hitPart) // If there is no hitpart then symmetry is not needed
+                {
+                    /*
+                     For now Parent Symmetry is the same as root symmetry but only on last "leaf" / or branch idk
+                    and Root is on all branch 
+                     But in the future we might want something more complex that allows us to chose how many branch back do we want to put symmetry on
+                     */
+                    var symmetryCount = SystemAPI.GetSingleton<EditSystemData>().SymmetryCount;
+                    if (SystemAPI.GetSingleton<EditSystemData>().IsSymmetryModeParent) {
+                        ParentSymmetryMode(part: partPrefab, symmetryCount: symmetryCount ,actionQueue: actionQueue, parentPart: parentPart, placeTransform: placeTransform); ; 
+                    }
+                    else { 
+                        RootSymmetryMode(actionQueue);
+                    }
+                }
+                else
+                {
+                    PlacePart(ref actionQueue, partPrefab, placeTransform);
+                }
+                lastID += 1;
+                
             }
         }
 
@@ -119,7 +143,7 @@ partial class EditSystem : SystemBase {
     }
 
     /// <returns>true if part found</returns>
-    bool GetPartFrom(RaycastInput raycast, out RaycastHit closestHit, out Entity part) {
+    bool GetPartFrom(RaycastInput raycast, out Unity.Physics.RaycastHit closestHit, out Entity part) {
         if (!SystemAPI.GetSingleton<PhysicsWorldSingleton>().CastRay(raycast, out closestHit)) {
             part = default;
             return false;
@@ -141,17 +165,34 @@ partial class EditSystem : SystemBase {
         return false;
     }
 
-    void PlacePart(ref EntityCommandBuffer actionQueue, Entity part, LocalTransform placeTransform, Entity parentPart) {
+    void PlacePart(ref EntityCommandBuffer actionQueue, Entity part, LocalTransform placeTransform) {
         var newPart = EntityManager.Instantiate(part);
 
         // todo - place one part at a time + modifier to place more at a time
 
-        if (EntityManager.Exists(parentPart)) {
-            actionQueue.AppendToBuffer(parentPart, new PartChildBuffer { Value = newPart });
-        }
         actionQueue.AddBuffer<PartChildBuffer>(newPart);
-
         actionQueue.SetComponent(newPart, placeTransform);
+        
+        /*if (parentPart != Entity.Null) // this is not needed since there is no more parent (seperated into to methodes) (might wanna merge them back into one in the future)
+        {
+            actionQueue.AppendToBuffer(parentPart, new PartChildBuffer { Value = newPart });
+            actionQueue.AddComponent(newPart, new Parente { Value = parentPart }); // you might wanna change this 
+        }*/
+        actionQueue.AddBuffer<Siblings>(newPart);
+        actionQueue.AppendToBuffer(newPart, new Siblings { Value = newPart});
+        actionQueue.AddComponent(newPart, new Part { id = lastID + 1, layer = 1 });
+        actionQueue.AddBuffer<PartChildBuffer>(newPart); // when creating a part give him an empty buffer (list) in which childrend entities will be add later
+        actionQueue.SetComponent(newPart, placeTransform);
+    }
+    
+    Entity place_parts(ref EntityCommandBuffer actionQueue, Entity partToPlace, Entity parentEntity, LocalTransform placementTransform)
+    {
+        var createdEntity = EntityManager.Instantiate(partToPlace);
+        actionQueue.AppendToBuffer(parentEntity, new PartChildBuffer { Value = createdEntity });
+        actionQueue.AddComponent(createdEntity, new Parente { Value = parentEntity });//, ID = lastID + 1 }); // you might wanna change this  // Why the FUCK did i thought this might need to be changed 
+        actionQueue.AddBuffer<PartChildBuffer>(createdEntity); // when creating a part give him an empty buffer (list) in which childrend entities will be add later // Adding empty buffers to every part might not be the best idea , since some of them might never be used
+        actionQueue.SetComponent(createdEntity, placementTransform);
+        return createdEntity;
     }
 
     void DeletePartTree(ref EntityCommandBuffer actionQueue, Entity rootPart) {
@@ -307,4 +348,53 @@ partial class EditSystem : SystemBase {
     protected override void OnDestroy() {
         input.Disable();
     }
+
+
+    // dont know if not using ref will be an issue
+    void ParentSymmetryMode(Entity part,int symmetryCount,EntityCommandBuffer actionQueue, Entity parentPart, LocalTransform placeTransform) {
+        RotatingPartPlacement(ref actionQueue, part: part, parentPart: parentPart, firstPartPos: placeTransform.Position, symMode: symmetryCount, restelayer: true);
+    }
+
+    void RootSymmetryMode(EntityCommandBuffer actionQueue) { }
+
+    void RotatingPartPlacement(ref EntityCommandBuffer actionQueue, Entity part, Entity parentPart, float3 firstPartPos, int symMode, bool restelayer) {
+        float3 center = SystemAPI.GetComponent<LocalTransform>(parentPart).Position;
+
+        Entity[] siblings = new Entity[symMode];
+        for (int i = 0; i < symMode; i++)
+        {
+            Quaternion rotation = Quaternion.AngleAxis(i * 360 / symMode, Vector3.up);
+            LocalTransform newp = new LocalTransform
+            { Position = (rotation * (firstPartPos - center)) + (Vector3)center, Rotation = rotation, Scale = 1 };
+            siblings[i] = place_parts(ref actionQueue, partToPlace: part, parentEntity: parentPart, placementTransform: newp);
+        }
+
+        // Set Siblings to every siblings // And Part
+        int layer;
+        if (!restelayer) { layer = SystemAPI.GetComponent<Part>(parentPart).layer + 1; }
+        else layer = 1;
+        for (int i = 0; i < symMode; i++)
+        { 
+            actionQueue.AddBuffer<Siblings>(siblings[i]);
+            // THIS "PART" is stored a lot of times with the same value , if need to optimse change the structre
+            actionQueue.AddComponent(siblings[i], new Part { id = lastID+1 , layer = layer}); // this lastId +1  is done a lot of time , it dont matter but if realy need to optimse create a current Id and add1 each time before creating parts
+
+            for (int j = 0; j < symMode; j++) { actionQueue.AppendToBuffer(siblings[i], new Siblings { Value = siblings[j] }); }
+            
+        }
+    }
+}
+
+public struct Parente : IComponentData
+{
+    public Entity Value;
+}
+public struct Siblings : IBufferElementData
+{
+    public Entity Value;
+}
+public struct Part : IComponentData
+{
+    public int layer; // this name might not be representative, if a part is placed on nothing , layer =1 , if placed on a part placed on nothing layer=2 ... // maybe start at zero could be better idk
+    public int id;
 }
