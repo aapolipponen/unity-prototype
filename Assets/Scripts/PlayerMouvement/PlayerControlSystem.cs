@@ -11,7 +11,6 @@ using UnityEngine.InputSystem;
 using UnityEngine.LightTransport;
 using UnityEngine.UIElements;
 using UnityEngine.UIElements.Experimental;
-using static PlayerBpdyTAg;
 using static UnityEditor.FilePathAttribute;
 using static UnityEngine.Rendering.DebugUI;
 
@@ -23,8 +22,8 @@ public partial struct PlayerControlSystem : ISystem
 
     private void AlignToCelestialBody(ref SystemState state)
     {   // THE HEAD CAN NOT ROTATE YET -> GOAL IS TO MAKE MINECRAFT LIKE CONTROL (BODY FOLLOWING HEAD WHEN MOVING)
-        foreach ((RefRW<LocalTransform> localTransform, RefRW<LocalToWorld> localToWorld, RefRW<PlayerBodyTag> playerBodyTag, RefRW<PhysicsVelocity> physicsVelocity)
-        in SystemAPI.Query<RefRW<LocalTransform>, RefRW<LocalToWorld>, RefRW<PlayerBodyTag>, RefRW<PhysicsVelocity>>())
+        foreach ((RefRW<LocalTransform> localTransform, RefRW<LocalToWorld> localToWorld, RefRW<PlayerBody> playerBodyTag, RefRW<PhysicsVelocity> physicsVelocity)
+        in SystemAPI.Query<RefRW<LocalTransform>, RefRW<LocalToWorld>, RefRW<PlayerBody>, RefRW<PhysicsVelocity>>())
         {
 
             // FOR DEBUG PURPERSE
@@ -45,8 +44,9 @@ public partial struct PlayerControlSystem : ISystem
             // ROTATE
             localTransform.ValueRW.Rotation = math.mul(localTransform.ValueRW.Rotation, quaternion.RotateY(rotate_deg * 2 * Mathf.PI / 360));
 
-            // GET AXIS PLAYER SHOULD BE ALIGNED WITH
-            float3 down = math.normalize(new float3(0, 0, 0) - localTransform.ValueRO.Position);
+            var center = World.DefaultGameObjectInjectionWorld.EntityManager.GetComponentData<LocalTransform>(playerBodyTag.ValueRO.AlignToBody).Position;
+           // GET AXIS PLAYER SHOULD BE ALIGNED WITH
+           float3 down = math.normalize(center - localTransform.ValueRO.Position);
             float3 up = -down;
             float3 back = Vector3.Cross(localTransform.ValueRO.Right(), down);
             float3 forward = -back;
@@ -84,8 +84,8 @@ public partial struct PlayerControlSystem : ISystem
   
     public void OnUpdate(ref SystemState state) {
         
-        AlignToCelestialBody(ref state);
-
+        AlignToCelestialBody(ref state); // and player mouvement and rotation ,
+        return;
         //Interact
         UnityEngine.Ray screenRay = Camera.main.ScreenPointToRay(Input.mousePosition);
         PhysicsWorldSingleton physicsworld = SystemAPI.GetSingleton<PhysicsWorldSingleton>();

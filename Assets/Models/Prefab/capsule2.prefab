@@ -150,8 +150,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3314a3ab9d6d64c4ba251c8452894a2e, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  T: 0
-  mass: 500
+  gravitingBody: {fileID: 0}
+  mass: 1
+  ApplyForce: 0
+  lastparentvelocity:
+    x: 0
+    y: 0
+    z: 0
+  CopyCat: 0
   force:
     x: 0
     y: 0
