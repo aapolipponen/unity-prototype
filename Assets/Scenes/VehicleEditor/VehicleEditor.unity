@@ -149,12 +149,15 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   notes: "Did you make sure your new part \n- doesn't have nested children?\n- is
     1x scale?"
-  SymmetryCount: 1
+  SymmetryCount: 3
   Symmetry: 1
   parts:
+  - {fileID: 291649011443137775, guid: b8071c84ee081784497daedc2088033e, type: 3}
+  - {fileID: 5851721893192153874, guid: 31594eae3d2204144b036f078bc07712, type: 3}
+  - {fileID: 3759678324063008135, guid: d9ecde16567369e4c810e09a7266a55d, type: 3}
+  - {fileID: 5745818522619893708, guid: 9b77aea95cf3c434d94e279649152d54, type: 3}
   - {fileID: 8128033632114004202, guid: 0c6e6e9cc45669d4fa2074fc3d8e024b, type: 3}
   - {fileID: 702321388179064471, guid: 7cd74aa46c994fc44840ccf2aa0f4e20, type: 3}
-  - {fileID: 5745818522619893708, guid: 9b77aea95cf3c434d94e279649152d54, type: 3}
 --- !u!4 &1767763747
 Transform:
   m_ObjectHideFlags: 0

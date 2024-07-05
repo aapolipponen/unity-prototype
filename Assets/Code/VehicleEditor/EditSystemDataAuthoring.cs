@@ -8,13 +8,6 @@ public class EditSystemDataAuthoring : MonoBehaviour {
     [TextArea]
     public string notes = "Did you make sure your new part \n- doesn't have nested children?\n- is 1x scale?";
 
-    [Range(1, 4)]
-    public int SymmetryCount = 1; 
-    enum SymmetryMode
-    { Parent, Root }
-    [SerializeField]
-    SymmetryMode Symmetry;
-
     public GameObject[] parts;
 
     public class Baker : Baker<EditSystemDataAuthoring> {
@@ -25,7 +18,7 @@ public class EditSystemDataAuthoring : MonoBehaviour {
                 .Select(x => GetEntity(x, TransformUsageFlags.Dynamic))
                 .ToList().ForEach(x => partsBuffer.Add(new PartsBuffer { Value = x }));
             AddComponent(entity,
-                new EditSystemData { SelectedPart = 0, AvailablePartsCount = authoring.parts.Length, IsSymmetryModeParent = authoring.Symmetry==SymmetryMode.Parent,SymmetryCount=authoring.SymmetryCount});
+                new EditSystemData { SelectedPart = 0, AvailablePartsCount = authoring.parts.Length});
         }
     }
 }

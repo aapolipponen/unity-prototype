@@ -1187,6 +1187,51 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""interactions"": """",
                     ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""ShowPathToRoot"",
+                    ""type"": ""Button"",
+                    ""id"": ""6475b04e-c9fb-4ab7-902f-682430a88d17"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""AddSym"",
+                    ""type"": ""Button"",
+                    ""id"": ""dbdedf56-85e0-4c54-8493-be00af1686eb"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""MinusSym"",
+                    ""type"": ""Button"",
+                    ""id"": ""14826dce-44de-4b12-99ae-9a86f0ac78e1"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""AddIterations"",
+                    ""type"": ""Button"",
+                    ""id"": ""1b85f4c0-39cf-4a74-9ebd-53430ed65be1"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
+                },
+                {
+                    ""name"": ""MinusIterations"",
+                    ""type"": ""Button"",
+                    ""id"": ""5f58429a-41d6-4b31-b604-ed698eeea9e0"",
+                    ""expectedControlType"": """",
+                    ""processors"": """",
+                    ""interactions"": """",
+                    ""initialStateCheck"": false
                 }
             ],
             ""bindings"": [
@@ -1231,6 +1276,61 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
                     ""processors"": """",
                     ""groups"": """",
                     ""action"": ""Cancel"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""90a27604-2d5c-4bb5-afec-076ee3119d20"",
+                    ""path"": ""<Keyboard>/space"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""ShowPathToRoot"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""b76108d2-2939-4705-aca9-c1a25e589d14"",
+                    ""path"": ""<Keyboard>/j"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""AddSym"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""f5aa34e1-e626-46dd-9ba4-f836e759e55f"",
+                    ""path"": ""<Keyboard>/h"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""MinusSym"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""7eb3d3b1-ef6e-405a-a6f6-8c96e4b9d548"",
+                    ""path"": ""<Keyboard>/#(I)"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""AddIterations"",
+                    ""isComposite"": false,
+                    ""isPartOfComposite"": false
+                },
+                {
+                    ""name"": """",
+                    ""id"": ""4fec5964-2d29-464e-98f4-62cde4104a83"",
+                    ""path"": ""<Keyboard>/#(U)"",
+                    ""interactions"": """",
+                    ""processors"": """",
+                    ""groups"": """",
+                    ""action"": ""MinusIterations"",
                     ""isComposite"": false,
                     ""isPartOfComposite"": false
                 }
@@ -1334,6 +1434,11 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         m_VehicleEditor_Delete = m_VehicleEditor.FindAction("Delete", throwIfNotFound: true);
         m_VehicleEditor_Summon = m_VehicleEditor.FindAction("Summon", throwIfNotFound: true);
         m_VehicleEditor_Cancel = m_VehicleEditor.FindAction("Cancel", throwIfNotFound: true);
+        m_VehicleEditor_ShowPathToRoot = m_VehicleEditor.FindAction("ShowPathToRoot", throwIfNotFound: true);
+        m_VehicleEditor_AddSym = m_VehicleEditor.FindAction("AddSym", throwIfNotFound: true);
+        m_VehicleEditor_MinusSym = m_VehicleEditor.FindAction("MinusSym", throwIfNotFound: true);
+        m_VehicleEditor_AddIterations = m_VehicleEditor.FindAction("AddIterations", throwIfNotFound: true);
+        m_VehicleEditor_MinusIterations = m_VehicleEditor.FindAction("MinusIterations", throwIfNotFound: true);
     }
 
     ~@InputSystem_Actions()
@@ -1697,6 +1802,11 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
     private readonly InputAction m_VehicleEditor_Delete;
     private readonly InputAction m_VehicleEditor_Summon;
     private readonly InputAction m_VehicleEditor_Cancel;
+    private readonly InputAction m_VehicleEditor_ShowPathToRoot;
+    private readonly InputAction m_VehicleEditor_AddSym;
+    private readonly InputAction m_VehicleEditor_MinusSym;
+    private readonly InputAction m_VehicleEditor_AddIterations;
+    private readonly InputAction m_VehicleEditor_MinusIterations;
     public struct VehicleEditorActions
     {
         private @InputSystem_Actions m_Wrapper;
@@ -1705,6 +1815,11 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         public InputAction @Delete => m_Wrapper.m_VehicleEditor_Delete;
         public InputAction @Summon => m_Wrapper.m_VehicleEditor_Summon;
         public InputAction @Cancel => m_Wrapper.m_VehicleEditor_Cancel;
+        public InputAction @ShowPathToRoot => m_Wrapper.m_VehicleEditor_ShowPathToRoot;
+        public InputAction @AddSym => m_Wrapper.m_VehicleEditor_AddSym;
+        public InputAction @MinusSym => m_Wrapper.m_VehicleEditor_MinusSym;
+        public InputAction @AddIterations => m_Wrapper.m_VehicleEditor_AddIterations;
+        public InputAction @MinusIterations => m_Wrapper.m_VehicleEditor_MinusIterations;
         public InputActionMap Get() { return m_Wrapper.m_VehicleEditor; }
         public void Enable() { Get().Enable(); }
         public void Disable() { Get().Disable(); }
@@ -1726,6 +1841,21 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @Cancel.started += instance.OnCancel;
             @Cancel.performed += instance.OnCancel;
             @Cancel.canceled += instance.OnCancel;
+            @ShowPathToRoot.started += instance.OnShowPathToRoot;
+            @ShowPathToRoot.performed += instance.OnShowPathToRoot;
+            @ShowPathToRoot.canceled += instance.OnShowPathToRoot;
+            @AddSym.started += instance.OnAddSym;
+            @AddSym.performed += instance.OnAddSym;
+            @AddSym.canceled += instance.OnAddSym;
+            @MinusSym.started += instance.OnMinusSym;
+            @MinusSym.performed += instance.OnMinusSym;
+            @MinusSym.canceled += instance.OnMinusSym;
+            @AddIterations.started += instance.OnAddIterations;
+            @AddIterations.performed += instance.OnAddIterations;
+            @AddIterations.canceled += instance.OnAddIterations;
+            @MinusIterations.started += instance.OnMinusIterations;
+            @MinusIterations.performed += instance.OnMinusIterations;
+            @MinusIterations.canceled += instance.OnMinusIterations;
         }
 
         private void UnregisterCallbacks(IVehicleEditorActions instance)
@@ -1742,6 +1872,21 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
             @Cancel.started -= instance.OnCancel;
             @Cancel.performed -= instance.OnCancel;
             @Cancel.canceled -= instance.OnCancel;
+            @ShowPathToRoot.started -= instance.OnShowPathToRoot;
+            @ShowPathToRoot.performed -= instance.OnShowPathToRoot;
+            @ShowPathToRoot.canceled -= instance.OnShowPathToRoot;
+            @AddSym.started -= instance.OnAddSym;
+            @AddSym.performed -= instance.OnAddSym;
+            @AddSym.canceled -= instance.OnAddSym;
+            @MinusSym.started -= instance.OnMinusSym;
+            @MinusSym.performed -= instance.OnMinusSym;
+            @MinusSym.canceled -= instance.OnMinusSym;
+            @AddIterations.started -= instance.OnAddIterations;
+            @AddIterations.performed -= instance.OnAddIterations;
+            @AddIterations.canceled -= instance.OnAddIterations;
+            @MinusIterations.started -= instance.OnMinusIterations;
+            @MinusIterations.performed -= instance.OnMinusIterations;
+            @MinusIterations.canceled -= instance.OnMinusIterations;
         }
 
         public void RemoveCallbacks(IVehicleEditorActions instance)
@@ -1841,5 +1986,10 @@ public partial class @InputSystem_Actions: IInputActionCollection2, IDisposable
         void OnDelete(InputAction.CallbackContext context);
         void OnSummon(InputAction.CallbackContext context);
         void OnCancel(InputAction.CallbackContext context);
+        void OnShowPathToRoot(InputAction.CallbackContext context);
+        void OnAddSym(InputAction.CallbackContext context);
+        void OnMinusSym(InputAction.CallbackContext context);
+        void OnAddIterations(InputAction.CallbackContext context);
+        void OnMinusIterations(InputAction.CallbackContext context);
     }
 }
