@@ -1,4 +1,5 @@
 using Mono.Cecil;
+using System.Linq;
 using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
@@ -21,9 +22,6 @@ using static Unity.Physics.CompoundCollider;
 /// </summary>
 partial class EditSystem : SystemBase {
     private const float SNAP_DISTANCE = .5f;
-    int lastID = 1; // Each time parts are placed (dont matter how many, if it is just in 1 click) they all have the same ID
-    int sym = 1;
-    int it = 1;
 
     // vehicle is made up of parts
 
@@ -40,24 +38,12 @@ partial class EditSystem : SystemBase {
         input.Enable();
     }
 
+
     protected override void OnUpdate() {
         var actionQueue = new EntityCommandBuffer(Allocator.Temp);
         var state = SystemAPI.GetSingleton<EditSystemData>();
 
-        if (input.MinusIterations.WasPressedThisFrame()) { 
-            it--; 
-            if (it < 1) { it = 1; }
-            Debug.Log($"Iteration: {it}"); }
-        if (input.AddIterations.WasPressedThisFrame()) { 
-            it++; 
-            Debug.Log($"Iteration: {it}"); }
-        if (input.MinusSym.WasPressedThisFrame()) { 
-            sym--; 
-            if (sym < 1) { sym = 1; } 
-            Debug.Log($"Symmetry: {sym}"); }
-        if (input.AddSym.WasPressedThisFrame()) { 
-            sym++; 
-            Debug.Log($"Symmetry: {sym}"); }
+        changeVariables();
 
         RaycastInput raycast = GetCameraRaycast(out float3 clickDirection);
         bool hitPart = GetPartFrom(raycast, out Unity.Physics.RaycastHit hitInfo, out Entity parentPart);
@@ -134,29 +120,16 @@ partial class EditSystem : SystemBase {
             }
             if (input.Place.WasPressedThisFrame()) {
             var partPrefab = SystemAPI.GetSingletonBuffer<PartsBuffer>()[state.SelectedPart].Value;
-                
+
+                SystemAPI.GetSingletonRW<EditSystemData>().ValueRW.ID += 1; // the state in update is not RW
             if (hitPart) // If there is no hitpart then symmetry is not needed
             {
-                    /*
-                        For now Parent Symmetry is the same as root symmetry but only on last "leaf" / or branch idk
-                    and Root is on all branch 
-                        But in the future we might want something more complex that allows us to chose how many branch back do we want to put symmetry on
-                        */
-                    RootSymmetryMode(actionQueue: actionQueue, part: partPrefab, parentPart: parentPart, symmetryCount: sym, placeTransform: placeTransform,MaxIt:it);
-                    /*
-                    var symmetryCount = SystemAPI.GetSingleton<EditSystemData>().SymmetryCount;
-                if (SystemAPI.GetSingleton<EditSystemData>().IsSymmetryModeParent) {
-                    ParentSymmetryMode(actionQueue: actionQueue, part: partPrefab, parentPart: parentPart, symmetryCount: symmetryCount, placeTransform: placeTransform); 
-                }
-                else {
-                    RootSymmetryMode(actionQueue: actionQueue, part: partPrefab, parentPart: parentPart, symmetryCount: symmetryCount, placeTransform: placeTransform);
-                }*/
+              DoSymmetry(actionQueue: actionQueue, part: partPrefab, parentPart: parentPart, symmetryCount: state.sym, placeTransform: placeTransform,MaxIt:state.it,ID:state.ID);
             }
             else
             {
-                PlacePart(ref actionQueue, partPrefab, placeTransform);
+                PlacePart(ref actionQueue, partPrefab, placeTransform,ID:state.ID);
             }
-            lastID += 1;
                 
             }
         }
@@ -192,31 +165,25 @@ partial class EditSystem : SystemBase {
         return false;
     }
 
-    void PlacePart(ref EntityCommandBuffer actionQueue, Entity part, LocalTransform placeTransform) {
+    void PlacePart(ref EntityCommandBuffer actionQueue, Entity part, LocalTransform placeTransform,int ID) {
         var newPart = EntityManager.Instantiate(part);
 
         // todo - place one part at a time + modifier to place more at a time
 
         actionQueue.AddBuffer<PartChildBuffer>(newPart);
         actionQueue.SetComponent(newPart, placeTransform);
-        
-        /*if (parentPart != Entity.Null) // this is not needed since there is no more parent (seperated into to methodes) (might wanna merge them back into one in the future)
-        {
-            actionQueue.AppendToBuffer(parentPart, new PartChildBuffer { Value = newPart });
-            actionQueue.AddComponent(newPart, new Parente { Value = parentPart }); // you might wanna change this 
-        }*/
-        actionQueue.AddBuffer<Siblings>(newPart);
-        actionQueue.AppendToBuffer(newPart, new Siblings { Value = newPart});
-        actionQueue.AddComponent(newPart, new Part { id = lastID + 1, layer = 1 });
+        actionQueue.AddBuffer<PartSiblingsBuffer>(newPart);
+        actionQueue.AppendToBuffer(newPart, new PartSiblingsBuffer { Value = newPart});
+        actionQueue.AddComponent(newPart, new PartComponent { id = ID, layer = 1 });
         actionQueue.AddBuffer<PartChildBuffer>(newPart); // when creating a part give him an empty buffer (list) in which childrend entities will be add later
         actionQueue.SetComponent(newPart, placeTransform);
     }
     
-    Entity place_parts(ref EntityCommandBuffer actionQueue, Entity partToPlace, Entity parentEntity, LocalTransform placementTransform)
+    Entity PlaceParts(ref EntityCommandBuffer actionQueue, Entity partToPlace, Entity parentEntity, LocalTransform placementTransform)
     {
         var createdEntity = EntityManager.Instantiate(partToPlace);
         actionQueue.AppendToBuffer(parentEntity, new PartChildBuffer { Value = createdEntity });
-        actionQueue.AddComponent(createdEntity, new Parente { Value = parentEntity });//, ID = lastID + 1 }); // you might wanna change this  // Why the FUCK did i thought this might need to be changed 
+        actionQueue.AddComponent(createdEntity, new PartParentComponent { Value = parentEntity });
         actionQueue.AddBuffer<PartChildBuffer>(createdEntity); // when creating a part give him an empty buffer (list) in which childrend entities will be add later // Adding empty buffers to every part might not be the best idea , since some of them might never be used
         actionQueue.SetComponent(createdEntity, placementTransform);
         return createdEntity;
@@ -382,7 +349,7 @@ partial class EditSystem : SystemBase {
         // this is just some debug stuff to see how the parts where created
         
             Debug.Log("");
-            int iteration = SystemAPI.GetComponent<Part>(parentPart).layer; // ok idk if iteration is the right term but it will do just fine for now
+            int iteration = SystemAPI.GetComponent<PartComponent>(parentPart).layer; // ok idk if iteration is the right term but it will do just fine for now
 
             int[] symmetryCounts = new int[iteration];
             int[] IDs = new int[iteration];
@@ -391,12 +358,12 @@ partial class EditSystem : SystemBase {
             var currentPart = parentPart;
             for (int i = 0; i < iteration; i++)
             {
-                var siblings = EntityManager.GetBuffer<Siblings>(currentPart);
+                var siblings = EntityManager.GetBuffer<PartSiblingsBuffer>(currentPart);
                 symmetryCounts[iteration - i - 1] = siblings.Length;
-                IDs[iteration - i - 1] = SystemAPI.GetComponent<Part>(currentPart).id;
+                IDs[iteration - i - 1] = SystemAPI.GetComponent<PartComponent>(currentPart).id;
                 entitiesRootToBottom[iteration - i - 1] = currentPart;
 
-                if (i != iteration - 1) { currentPart = SystemAPI.GetComponent<Parente>(currentPart).Value; } // root has no parent
+                if (i != iteration - 1) { currentPart = SystemAPI.GetComponent<PartParentComponent>(currentPart).Value; } // root has no parent
             }
             foreach (var t in entitiesRootToBottom)
             {
@@ -406,18 +373,13 @@ partial class EditSystem : SystemBase {
                 else { lt.Scale = 1.0f; }
                 actionQueue.SetComponent(t, lt);
             }
-
-
-        
-
-
     }
 
     // dont know if not using ref will be an issue
     // THERE MIGHT BE AN ISSUE , IF A PART IS REGISTERED AS ANOTHER PART SIBLING BUT THEN THIS FIRST PART IS DESTROYED
     // IF A NEW PART IS PLACED WITH THE SAME VALUE AS THE DESTROYED ONE THERE MIGHT BE SOME ISSUE -> to fix this the deleted part's reference should be cleaned from his siblings and parents
-    void RootSymmetryMode(EntityCommandBuffer actionQueue,Entity part,Entity parentPart,int symmetryCount,LocalTransform placeTransform,int MaxIt) {
-        int iteration = SystemAPI.GetComponent<Part>(parentPart).layer; // ok idk if iteration is the right term but it will do just fine for now
+    void DoSymmetry(EntityCommandBuffer actionQueue,Entity part,Entity parentPart,int symmetryCount,LocalTransform placeTransform,int MaxIt,int ID) {
+        int iteration = SystemAPI.GetComponent<PartComponent>(parentPart).layer; // ok idk if iteration is the right term but it will do just fine for now
 
         if (MaxIt < iteration) { iteration = MaxIt; }
         
@@ -429,12 +391,12 @@ partial class EditSystem : SystemBase {
         var currentPart = parentPart;
         for (int i = 0; i < iteration; i++)
         {
-            var siblings = EntityManager.GetBuffer<Siblings>(currentPart);
+            var siblings = EntityManager.GetBuffer<PartSiblingsBuffer>(currentPart);
             symmetryCounts[iteration-i-1] = siblings.Length;
-            IDs[iteration - i - 1] = SystemAPI.GetComponent<Part>(currentPart).id;
+            IDs[iteration - i - 1] = SystemAPI.GetComponent<PartComponent>(currentPart).id;
             entitiesRootToBottom[iteration - i - 1] = currentPart;
-            selfplaces[iteration - i - 1] = SystemAPI.GetComponent<Part>(currentPart).selfplace;
-            if (i != iteration - 1) {currentPart = SystemAPI.GetComponent<Parente>(currentPart).Value; } // root has no parent
+            selfplaces[iteration - i - 1] = SystemAPI.GetComponent<PartComponent>(currentPart).selfplace;
+            if (i != iteration - 1) {currentPart = SystemAPI.GetComponent<PartParentComponent>(currentPart).Value; } // root has no parent
         }
         symmetryCounts[0] = 1;
 
@@ -452,7 +414,7 @@ partial class EditSystem : SystemBase {
                     foreach (var child in EntityManager.GetBuffer<PartChildBuffer>(lastParent))
                     {
                         if (!EntityManager.Exists(child.Value)) { continue; } // there might be a better way to place this
-                        if (SystemAPI.GetComponent<Part>(child.Value).id == IDs[depth]) {
+                        if (SystemAPI.GetComponent<PartComponent>(child.Value).id == IDs[depth]) {
                             currentParent = child.Value;break;//only need to find one since we will be looping on it's siblings later
                         }
                     }
@@ -461,7 +423,7 @@ partial class EditSystem : SystemBase {
             if (currentParent==Entity.Null) { return; } // if no conform child part has been found then do nothing (this happens only if parts have been deleted)
             
 
-            DynamicBuffer<Siblings> siblings_of_current_parent = EntityManager.GetBuffer<Siblings>(currentParent);
+            DynamicBuffer<PartSiblingsBuffer> siblings_of_current_parent = EntityManager.GetBuffer<PartSiblingsBuffer>(currentParent);
 
             Quaternion rotate = Quaternion.AngleAxis(360 / symmetryCounts[depth], Vector3.up); // Rotation
             float3 center = SystemAPI.GetComponent<LocalTransform>(lastParent).Position;
@@ -480,7 +442,7 @@ partial class EditSystem : SystemBase {
                     if ((depth + 1) == iteration)
                     { 
                         var = false;
-                        RotatingPartPlacement(ref actionQueue, part: part, parentPart: parentPart, firstPartPos: firstPartPos, symmetryCount: symmetryCount, resetlayer: false, placeTransform: placeTransform);
+                        RotatingPartPlacement(ref actionQueue, part: part, parentPart: parentPart, firstPartPos: firstPartPos, symmetryCount: symmetryCount, resetlayer: false, placeTransform: placeTransform,ID:ID);
                     }
                     else
                     {
@@ -496,7 +458,7 @@ partial class EditSystem : SystemBase {
 
     }
 
-    void RotatingPartPlacement(ref EntityCommandBuffer actionQueue, Entity part, Entity parentPart, float3 firstPartPos, int symmetryCount, bool resetlayer, LocalTransform placeTransform) {
+    void RotatingPartPlacement(ref EntityCommandBuffer actionQueue, Entity part, Entity parentPart, float3 firstPartPos, int symmetryCount, bool resetlayer, LocalTransform placeTransform,int ID) {
         float3 center = SystemAPI.GetComponent<LocalTransform>(parentPart).Position;
 
         Entity[] siblings = new Entity[symmetryCount];
@@ -507,36 +469,52 @@ partial class EditSystem : SystemBase {
             //p.y += 0.25f * i; // debuging purpsers shows which part is placed first second thrid ...
             LocalTransform newp = new LocalTransform
             { Position = p, Rotation = placeTransform.Rotation * rotation, Scale = 1 };
-            siblings[i] = place_parts(ref actionQueue, partToPlace: part, parentEntity: parentPart, placementTransform: newp);
+            siblings[i] = PlaceParts(ref actionQueue, partToPlace: part, parentEntity: parentPart, placementTransform: newp);
         }
 
-        // Set Siblings to every siblings // And Part
+        // Set PartSiblingsBuffer to every siblings // And PartComponent
         int layer;
-        if (!resetlayer) { layer = SystemAPI.GetComponent<Part>(parentPart).layer + 1; }
+        if (!resetlayer) { layer = SystemAPI.GetComponent<PartComponent>(parentPart).layer + 1; }
         else layer = 1;
         for (int i = 0; i < symmetryCount; i++)
         { 
-            actionQueue.AddBuffer<Siblings>(siblings[i]);
-            // THIS "PART" is stored a lot of times with the same value , if need to optimse change the structre
-            actionQueue.AddComponent(siblings[i], new Part { id = lastID+1 , layer = layer , selfplace = i}); // this lastId +1  is done a lot of time , it dont matter but if realy need to optimse create a current Id and add1 each time before creating parts
+            actionQueue.AddBuffer<PartSiblingsBuffer>(siblings[i]);
+            // THIS "PartComponent" is stored a lot of times with the same value , if need to optimse change the structre (the same value is stored 3 times if placed with x3 sym)
+            actionQueue.AddComponent(siblings[i], new PartComponent { id = ID , layer = layer , selfplace = i});
 
-            for (int j = 0; j < symmetryCount; j++) { actionQueue.AppendToBuffer(siblings[i], new Siblings { Value = siblings[j] }); }
-            
+            for (int j = 0; j < symmetryCount; j++) { actionQueue.AppendToBuffer(siblings[i], new PartSiblingsBuffer { Value = siblings[j] }); }  
         }
     }
-}
 
-public struct Parente : IComponentData
-{
-    public Entity Value;
-}
-public struct Siblings : IBufferElementData
-{
-    public Entity Value;
-}
-public struct Part : IComponentData
-{
-    public int layer; // this name might not be representative, if a part is placed on nothing , layer =1 , if placed on a part placed on nothing layer=2 ... // maybe start at zero could be better idk
-    public int id;
-    public int selfplace; // this is like which sibling it is , the first one ? the second one ? // ######
+    void changeVariables()
+    {
+        var state = SystemAPI.GetSingletonRW<EditSystemData>();
+        bool print = false;
+        if (input.MinusIterations.WasPressedThisFrame())
+        {
+            print = true;
+            state.ValueRW.it--;
+        }
+        else if (input.AddIterations.WasPressedThisFrame())
+        {
+            print = true;
+            state.ValueRW.it++;
+        }
+        if (input.MinusSym.WasPressedThisFrame())
+        {
+            print = true;
+            state.ValueRW.sym--;
+        }
+        else if (input.AddSym.WasPressedThisFrame())
+        {
+            print = true;
+            state.ValueRW.sym++;
+        }
+        if (state.ValueRO.sym < 1) { state.ValueRW.sym = 1; }
+        if (state.ValueRO.it < 1) { state.ValueRW.it = 1; }
+
+        if (print) { Debug.Log($"Symmetry x{state.ValueRO.sym} , {state.ValueRO.it} iterations"); }
+
+    }
+
 }

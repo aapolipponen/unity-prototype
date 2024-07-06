@@ -19,4 +19,8 @@ public struct EditSystemData : IComponentData {
     public bool WasAgainstPartBeforeSnapping;
     public float3 LastGhostPositionBeforeSnap;
 
+    public int ID;// Each time parts are placed (dont matter how many, if it is just in 1 click) they all have the same ID
+    public int sym;
+    public int it;
+
 }
