@@ -4,6 +4,10 @@ using Unity.Jobs;
 using UnityEngine;
 using Unity.Entities;
 using Unity.VisualScripting.YamlDotNet.Core.Tokens;
+using Unity.Collections;
+using System.Linq;
+using UnityEditor.Build;
+using Unity.Mathematics;
 
 namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 {
@@ -11,47 +15,72 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
     public class PlanetMeshGenerationTest : MonoBehaviour
     {
         [SerializeField]
-        private Shader debugShader;
-        
+        public Material Material;
+        public Shader debugShader;
+        public bool ShaderOrMaterial;
+        public bool ConstantUpdate; // If not then update only when cam pos changes
+
         private Mesh mesh;
         private GameObject previewGameObject;
-        private Material debugMaterial;
+        
         [Range(0,15)]
         public int MaxIteration;
-
         public Transform cameraPosition;
-        public Entity Entity;
+        private Vector3 lastpos;
+        public parameters parameter;
+
+        [System.Serializable]
+        public class parameters
+        {
+            [Range(1, 10)]
+            public int layernumber;
+
+            public float strenght;
+            public float roughtness;
+
+            [Range(1, 10)]
+            public float roughtnesschange;
+            [Range(0, 1)]
+            public float strenghtchange;
+
+            public float3 center;
+        }
+        private void Start() {
+            previewGameObject = new GameObject(nameof(PlanetMeshGenerationTest));
+            previewGameObject.AddComponent<MeshFilter>();
+            previewGameObject.AddComponent<MeshRenderer>();
+        }
         private void Update()
         {
-            if (mesh)
-                Destroy(mesh);
-
-            if (previewGameObject)
-                Destroy(previewGameObject);
-
-            if (debugMaterial)
-                Destroy(debugMaterial);
-
+            if (!ConstantUpdate) { if (lastpos == cameraPosition.position) return; }
+            lastpos = cameraPosition.position;
             mesh = new Mesh();
             var meshDataArray = Mesh.AllocateWritableMeshData(mesh);
 
-            EntityManager manager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            //EntityManager manager = World.DefaultGameObjectInjectionWorld.EntityManager;
             var job = new PlanetMeshGenerationJob
             {
                 MeshData = meshDataArray[0],
                 MaxIteration = MaxIteration,
-                campos=cameraPosition.position
-        };
+                campos = cameraPosition.position,
+                roughtness = parameter.roughtness,
+                strenght =  parameter.strenght,
+                center = parameter.center,  
+                layernumber = parameter.layernumber,
+                roughtnesschange = parameter.roughtnesschange,
+                strenghtchange = parameter.strenghtchange
+            };
             job.Run();
         
             Mesh.ApplyAndDisposeWritableMeshData(meshDataArray, mesh);
             mesh.RecalculateBounds();
-
-            debugMaterial = new Material(debugShader);            
-        
-            previewGameObject = new GameObject(nameof(PlanetMeshGenerationTest));
-            previewGameObject.AddComponent<MeshFilter>().sharedMesh = mesh;
-            previewGameObject.AddComponent<MeshRenderer>().sharedMaterial = debugMaterial;
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            previewGameObject.GetComponent<MeshFilter>().sharedMesh = mesh;
+            if (ShaderOrMaterial)
+                previewGameObject.GetComponent<MeshRenderer>().sharedMaterial = Material;
+            else
+                previewGameObject.GetComponent<MeshRenderer>().sharedMaterial = new Material(debugShader);
         }
 
         private void OnDestroy()
@@ -62,8 +91,8 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             if(previewGameObject)
                 Destroy(previewGameObject);
             
-            if(debugMaterial)
-                Destroy(debugMaterial);
+            //if(debugMaterial)
+            //    Destroy(debugMaterial);
         }
     }
 }
