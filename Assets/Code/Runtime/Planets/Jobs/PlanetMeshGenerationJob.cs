@@ -26,8 +26,8 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
     [BurstCompile]
     public struct PlanetMeshGenerationJob : IJob
     {
-        [WriteOnly]
-        public Mesh.MeshData MeshData;
+        public NativeList<Vertex> Vertices;
+        public NativeList<Triangle> Triangles;
 
         public float cube;
         public int MaxIteration;
@@ -57,73 +57,71 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                 (distance < 0.125 && iteration <= 14)))
             { return true; }else { return false; }
         }
-        public unsafe void Execute()
+        public void Execute()
         {
             selfposition = float3.zero;
-            var vertices = new NativeList<Vertex>(Allocator.Temp);
-            var triangles = new NativeList<Triangle>(Allocator.Temp);
 
             // TOP   FRONT  BACK    RIGHT   LEFT (Views)
             // 20    02     64      40      26  
             // 64    13     75      51      37
-            vertices.Add(new Vertex { Position = math.normalize(new float3(+1,+1,+1)) });//0
-            vertices.Add(new Vertex { Position = math.normalize(new float3(+1,-1,+1)) });//1
+            Vertices.Add(new Vertex { Position = math.normalize(new float3(+1,+1,+1)) });//0
+            Vertices.Add(new Vertex { Position = math.normalize(new float3(+1,-1,+1)) });//1
 
-            vertices.Add(new Vertex { Position = math.normalize(new float3(-1,+1,+1)) });//2
-            vertices.Add(new Vertex { Position = math.normalize(new float3(-1,-1,+1)) });//3
+            Vertices.Add(new Vertex { Position = math.normalize(new float3(-1,+1,+1)) });//2
+            Vertices.Add(new Vertex { Position = math.normalize(new float3(-1,-1,+1)) });//3
 
-            vertices.Add(new Vertex { Position = math.normalize(new float3(+1,+1,-1)) });//4
-            vertices.Add(new Vertex { Position = math.normalize(new float3(+1,-1,-1)) });//5
+            Vertices.Add(new Vertex { Position = math.normalize(new float3(+1,+1,-1)) });//4
+            Vertices.Add(new Vertex { Position = math.normalize(new float3(+1,-1,-1)) });//5
 
-            vertices.Add(new Vertex { Position = math.normalize(new float3(-1,+1,-1)) });//6
-            vertices.Add(new Vertex { Position = math.normalize(new float3(-1,-1,-1)) });//7
+            Vertices.Add(new Vertex { Position = math.normalize(new float3(-1,+1,-1)) });//6
+            Vertices.Add(new Vertex { Position = math.normalize(new float3(-1,-1,-1)) });//7
 
-            for (int id = 0; id < vertices.Length; id++)
+            for (int id = 0; id < Vertices.Length; id++)
             {
-                var x = vertices[id];
+                var x = Vertices[id];
                 x.Position = changeHeight(x.Position);
-                vertices[id] = x;
+                Vertices[id] = x;
             }
 
             var vertexDict = new NativeHashMap<float3, int>(23000, Allocator.TempJob); // This "dict" or whatever a hashmap is is connecting vertex positions to their index in verticies (so that I check for duplicated verticies and delete them)
             int T =0;
-            foreach (var thing in vertices) { vertexDict[thing.Position] = T; T++; }
+            foreach (var thing in Vertices) { vertexDict[thing.Position] = T; T++; }
             // TOP
-            triangles.Add(new Triangle { Index0 = (short)4, Index1 = (short)2, Index2 = (short)0});
-            triangles.Add(new Triangle { Index0 = (short)2, Index1 = (short)4, Index2 = (short)6});
+            Triangles.Add(new Triangle { Index0 = (short)4, Index1 = (short)2, Index2 = (short)0});
+            Triangles.Add(new Triangle { Index0 = (short)2, Index1 = (short)4, Index2 = (short)6});
             // BOT
-            triangles.Add(new Triangle { Index0 = (short)3, Index1 = (short)5, Index2 = (short)1});
-            triangles.Add(new Triangle { Index0 = (short)5, Index1 = (short)3, Index2 = (short)7});
+            Triangles.Add(new Triangle { Index0 = (short)3, Index1 = (short)5, Index2 = (short)1});
+            Triangles.Add(new Triangle { Index0 = (short)5, Index1 = (short)3, Index2 = (short)7});
             // FRONT
-            triangles.Add(new Triangle { Index0 = (short)3, Index1 = (short)0, Index2 = (short)2 });
-            triangles.Add(new Triangle { Index0 = (short)0, Index1 = (short)3, Index2 = (short)1 });
+            Triangles.Add(new Triangle { Index0 = (short)3, Index1 = (short)0, Index2 = (short)2 });
+            Triangles.Add(new Triangle { Index0 = (short)0, Index1 = (short)3, Index2 = (short)1 });
             // BACK
-            triangles.Add(new Triangle { Index0 = (short)5, Index1 = (short)6, Index2 = (short)4 });
-            triangles.Add(new Triangle { Index0 = (short)6, Index1 = (short)5, Index2 = (short)7 });
+            Triangles.Add(new Triangle { Index0 = (short)5, Index1 = (short)6, Index2 = (short)4 });
+            Triangles.Add(new Triangle { Index0 = (short)6, Index1 = (short)5, Index2 = (short)7 });
             // RIGHT
-            triangles.Add(new Triangle { Index0 = (short)1, Index1 = (short)4, Index2 = (short)0 });
-            triangles.Add(new Triangle { Index0 = (short)4, Index1 = (short)1, Index2 = (short)5 });
+            Triangles.Add(new Triangle { Index0 = (short)1, Index1 = (short)4, Index2 = (short)0 });
+            Triangles.Add(new Triangle { Index0 = (short)4, Index1 = (short)1, Index2 = (short)5 });
             // Left
-            triangles.Add(new Triangle { Index0 = (short)7, Index1 = (short)2, Index2 = (short)6 });
-            triangles.Add(new Triangle { Index0 = (short)2, Index1 = (short)7, Index2 = (short)3 });
+            Triangles.Add(new Triangle { Index0 = (short)7, Index1 = (short)2, Index2 = (short)6 });
+            Triangles.Add(new Triangle { Index0 = (short)2, Index1 = (short)7, Index2 = (short)3 });
 
             
 
             
 
             for (int i=0; i < MaxIteration; i++) { 
-                int l = triangles.Length;
+                int l = Triangles.Length;
                 for (int index = 0; index < l; index++)
                 {
-                    float3 pa = vertices[triangles[index].Index0].Position;
-                    float3 pb = vertices[triangles[index].Index1].Position;
-                    float3 pc = vertices[triangles[index].Index2].Position;
+                    float3 pa = Vertices[Triangles[index].Index0].Position;
+                    float3 pb = Vertices[Triangles[index].Index1].Position;
+                    float3 pc = Vertices[Triangles[index].Index2].Position;
 
-                    float3 m = math.normalize((pa + pb + pc) / 3); // middle point / average (The first few itarations have points real far away , and taking the average is important (we might be able to skip this for higher iterations when triangles are smaller))
-                    if ((math.dot(campos, m) < -0.1)&& (i > 4)) {continue; }  // Dont divide back side (backside is  dot()<0 but we might want a little bit of the back side for the triangles near the back side that share verticies of the backside)
+                    float3 m = math.normalize((pa + pb + pc) / 3); // middle point / average (The first few itarations have points real far away , and taking the average is important (we might be able to skip this for higher iterations when Triangles are smaller))
+                    if ((math.dot(campos, m) < -0.1)&& (i > 4)) {continue; }  // Dont divide back side (backside is  dot()<0 but we might want a little bit of the back side for the Triangles near the back side that share verticies of the backside)
 
                      
-                    float3 newp = math.normalize((float3)((pa + pb) / 2)); // Point that splits triangles     
+                    float3 newp = math.normalize((float3)((pa + pb) / 2)); // Point that splits Triangles     
                     newp = changeHeight(newp);
                     float d = (campos - new Vector3(newp.x, newp.y, newp.z)).magnitude;// distance
                     // If the triangel is already devided devide it (if there is a point in the middle of the hypotenus) if not then create the new point and then divide it
@@ -131,51 +129,17 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                     if (!vertexDict.TryGetValue(newp, out p))
                     {
                         if (!doBissect(distance: d, iteration: i)) {continue;} // If dont generate then dont
-                        p = vertices.Length;
+                        p = Vertices.Length;
                         vertexDict[newp] = p;
-                        vertices.Add(new Vertex { Position = newp }) ;//6
+                        Vertices.Add(new Vertex { Position = newp }) ;//6
                     }
-                    // We need to destroy the old triangle and add 2 new triangles 
-                    triangles.Add(new Triangle { Index0 = triangles[index].Index1, Index1 = triangles[index].Index2, Index2 = (short)p });
-                    triangles[index] = new Triangle { Index1 = triangles[index].Index0, Index0 = triangles[index].Index2, Index2 = (short)p };
+                    // We need to destroy the old triangle and add 2 new Triangles 
+                    Triangles.Add(new Triangle { Index0 = Triangles[index].Index1, Index1 = Triangles[index].Index2, Index2 = (short)p });
+                    Triangles[index] = new Triangle { Index1 = Triangles[index].Index0, Index0 = Triangles[index].Index2, Index2 = (short)p };
                 }
             }
-
-            
-
-            // Configure mesh data
-            var vertexAttributeDescriptor = CreateVertexAttributeDescriptor();
-            MeshData.SetVertexBufferParams(vertices.Length, vertexAttributeDescriptor);
-            MeshData.SetIndexBufferParams(triangles.Length * 3, IndexFormat.UInt16);
-            
-            // Apply vertices 
-            var vertexBuffer = MeshData.GetVertexData<Vertex>();
-            UnsafeUtility.MemCpy(vertexBuffer.GetUnsafePtr(), vertices.GetUnsafeReadOnlyPtr(), (long)vertices.Length * UnsafeUtility.SizeOf<Vertex>());
-
-            // Apply Indices
-            var indexBuffer = MeshData.GetIndexData<short>();
-            UnsafeUtility.MemCpy(indexBuffer.GetUnsafePtr(), triangles.GetUnsafeReadOnlyPtr(), (long)triangles.Length * UnsafeUtility.SizeOf<Triangle>());
-
-            // Configure sub mesh
-            var subMesh = new SubMeshDescriptor(0, triangles.Length * 3)
-            {
-                topology = MeshTopology.Triangles,
-                vertexCount = vertices.Length
-            };
-            MeshData.subMeshCount = 1;
-            MeshData.SetSubMesh(0, subMesh);
         }
-        private NativeArray<VertexAttributeDescriptor> CreateVertexAttributeDescriptor()
-        {
-            return new NativeArray<VertexAttributeDescriptor>(4, Allocator.Temp)
-            {
-                // ReSharper disable RedundantArgumentDefaultValue
-                [0] = new(VertexAttribute.Position, VertexAttributeFormat.Float32, 3),
-                [1] = new(VertexAttribute.Normal, VertexAttributeFormat.Float32, 3),
-                [2] = new(VertexAttribute.Tangent, VertexAttributeFormat.Float32, 4),
-                [3] = new(VertexAttribute.TexCoord0, VertexAttributeFormat.Float32, 2),
-            };
-        }
+
         float noise(float3 point)
         {            
             return (Mathf.PerlinNoise(point.x, point.y) +Mathf.PerlinNoise(point.y, point.x) +Mathf.PerlinNoise(point.z, point.y) + Mathf.PerlinNoise(point.y, point.z) + Mathf.PerlinNoise(point.z, point.x) + Mathf.PerlinNoise(point.x, point.z)) / 6;
@@ -195,9 +159,9 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
             }
             return (noiseToAdd + 1) * Vector3.Normalize(point) * 1;
         }
-        void SetHeights(int id,ref NativeList<Vertex> vertices)
+        void SetHeights(int id,ref NativeList<Vertex> Vertices)
         {
-            var p = vertices[id];
+            var p = Vertices[id];
             var pp = p.Position;
 
             /* Craters
@@ -227,7 +191,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
             if (Vector3.Magnitude(p.Position) < v1) { p.Position = Vector3.Normalize(p.Position) * v1; } // Minimum floor
             */
             //p.UV = new Vector2(Vector3.Magnitude(p.Position)-0.75f, Vector3.Magnitude(p.Position) - 0.75f); // This isnt real well done -> Setting uv according to height
-            vertices[id] = p;
+            Vertices[id] = p;
         }
     }
 }
