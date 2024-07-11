@@ -11,6 +11,7 @@ using Unity.Collections.LowLevel.Unsafe;
 using UnityEditor.Build;
 using Unity.Mathematics;
 using UnityEngine.Rendering;
+using static PLE.Prototype.Runtime.Code.Runtime.Planets.PlanetMeshGenerationTest;
 
 namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 {
@@ -21,6 +22,8 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
         public Material Material;
         public Shader debugShader;
         public bool ShaderOrMaterial;
+
+        public Transform cameraPosition;
         public bool ConstantUpdate; // If not then update only when cam pos changes
 
         private Mesh mesh;
@@ -28,18 +31,40 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
         
         [Range(0,15)]
         public int MaxIteration;
-        public Transform cameraPosition;
-        private Vector3 lastpos;
-        public float floorheight;
+        public RenderDistance[] renderDistancesInput;
+
+        public bool deleteRepetedVertex;
+
+        [Range(0,15)]
+        public int backsideIterations;
+        public float backsideLimit;
+        [Range(0, 15)]
+        public int overhorizonIterations;
+        public float overhorizonLimit;
+        public float overhorizonLimit2;
+
         public parameters parameter;
 
+        private NativeList<int> renderIterations;
+        private NativeList<float> renderDistances;
         private NativeList<Vertex> vertices;
         private NativeList<Triangle> triangles;
         private NativeHashMap<float3, int> vertexToIndex;
+        private Vector3 lastpos;
+
+        [System.Serializable]
+        public class RenderDistance
+        {
+            public float distance;
+            [Range(0, 15)]
+            public int iteration;
+        }
+
 
         [System.Serializable]
         public class parameters
         {
+            public float floorheight;
             [Range(1, 10)]
             public int layernumber;
 
@@ -62,6 +87,9 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             vertices = new NativeList<Vertex>(Allocator.Persistent);
             triangles = new NativeList<Triangle>(Allocator.Persistent);
             vertexToIndex = new NativeHashMap<float3, int>(23000, Allocator.Persistent);
+            renderIterations = new NativeList<int>(Allocator.Persistent);
+            renderDistances = new NativeList<float>(Allocator.Persistent);
+            
         }
 
         private void OnDestroy()
@@ -78,6 +106,8 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             vertices.Dispose();
             triangles.Dispose();
             vertexToIndex.Dispose();
+            renderDistances.Dispose();
+            renderIterations.Dispose();
         }
 
         private unsafe void Update()
@@ -88,6 +118,14 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             vertices.Clear();
             triangles.Clear();
             vertexToIndex.Clear();
+            renderDistances.Clear();
+            renderIterations.Clear();
+
+            foreach(var value in renderDistancesInput)
+            {
+                renderDistances.Add(value.distance);
+                renderIterations.Add(value.iteration);
+            }
 
             initializeVariables(triangles: ref triangles,vertices: ref vertices, vertexToIndex: ref vertexToIndex);
 
@@ -105,12 +143,32 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                 roughtnesschange = parameter.roughtnesschange,
                 strenghtchange = parameter.strenghtchange,
                 centerOffset = parameter.centerOffset,
-                selfposition = float3.zero,
                 VertexToIndex = vertexToIndex,
-                floorheight = floorheight
-            };
+                floorheight = parameter.floorheight,
+                deleteRepetedVertex = deleteRepetedVertex,
+                renderDistances = renderDistances,
+                renderIterations = renderIterations,
+                backsideLimit = backsideLimit,
+                backsideIterations = backsideIterations,
+                overhorizonIterations = overhorizonIterations,
+                overhorizonLimit = overhorizonLimit,
+                overhorizonLimit2 = overhorizonLimit2,
+
+    };
             job.Run();
-            
+
+            if (deleteRepetedVertex)
+            {
+                for (int i = 0; i < triangles.Length; i++)
+                {
+                    int p;
+                    var v = triangles[i];
+                    if (vertexToIndex.TryGetValue(vertices[v.Index0].Position, out p)) { v.Index0 = (short)p; }
+                    if (vertexToIndex.TryGetValue(vertices[v.Index1].Position, out p)) { v.Index1 = (short)p; }
+                    if (vertexToIndex.TryGetValue(vertices[v.Index2].Position, out p)) { v.Index2 = (short)p; }
+                    triangles[i] = v;
+                }
+            }
             if(!mesh) // I've changed this so that the mesh is reused instead of recreated :) ~UnknownDude
                 mesh = new Mesh();
             
@@ -241,7 +299,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                 s *= parameter.strenghtchange;
                 c += parameter.centerOffset;
             }
-            noiseToAdd = Mathf.Max(0, noiseToAdd - floorheight);
+            noiseToAdd = Mathf.Max(0, noiseToAdd - parameter.floorheight);
             return (noiseToAdd + 1) * Vector3.Normalize(point) * 1;
         }
     }

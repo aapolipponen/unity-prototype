@@ -1,4 +1,5 @@
 ﻿using JetBrains.Annotations;
+using PlasticPipe.PlasticProtocol.Messages;
 using PLE.Prototype.Runtime.Code.Runtime.Planets.Data;
 using System;
 using System.Collections.Generic;
@@ -29,24 +30,45 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
         public NativeList<Vertex> Vertices;
         public NativeList<Triangle> Triangles;
         public NativeHashMap<float3, int> VertexToIndex;
+        [ReadOnly] public NativeList<int> renderIterations;
+        [ReadOnly] public NativeList<float> renderDistances;
+        
 
-        public float cube;
-        public int MaxIteration;
-        public int Radius;
-        public Vector3 campos;
-        public Vector3 selfposition;
+        [ReadOnly] public int MaxIteration;
+        [ReadOnly] public Vector3 campos;
 
-        public float floorheight;
-        public float strenght;
-        public float roughtness;
-        public float3 center;
-        public float3 centerOffset;
-        public int layernumber;
-        public float roughtnesschange;
-        public float strenghtchange;
+        [ReadOnly] public float floorheight;
+        [ReadOnly] public float strenght;
+        [ReadOnly] public float roughtness;
+        [ReadOnly] public float3 center;
+        [ReadOnly] public float3 centerOffset;
+        [ReadOnly] public int layernumber;
+        [ReadOnly] public float roughtnesschange;
+        [ReadOnly] public float strenghtchange;
+        [ReadOnly] public bool deleteRepetedVertex;
+
+        [ReadOnly] public int backsideIterations;
+        [ReadOnly] public float backsideLimit;
+
+
+        [ReadOnly] public int overhorizonIterations;
+        [ReadOnly] public float overhorizonLimit;
+        [ReadOnly] public float overhorizonLimit2;
 
         public bool doBissect(float distance, int iteration)
         {
+            for (int k = 0; k < renderDistances.Length; k++)
+            {
+                if (iteration <= renderIterations[k])
+                {
+                    if (distance <= renderDistances[k])
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+            /*
             // I could use a better structure like a dictionnary, or maybe just a (mathematical) function
              return (                    iteration <= 5 ) || // Do 5 iteration for everything
                     (distance < 16    && iteration <= 6 ) || // Do 6 iteration for distance < 32
@@ -57,11 +79,13 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                     (distance < 0.500 && iteration <= 11) ||
                     (distance < 0.250 && iteration <= 12) ||
                     (distance < 0.125 && iteration <= 13) ||
-                    (distance < 0.0625 && iteration <= 14);
+                    (distance < 0.0625 && iteration <= 14);*/
         }
         public void Execute()
-        {           
+        {
+            // this is for the uv texture (will color different iterations)
 
+            var t = new NativeList<float2>(Allocator.TempJob){new float2(0, 0), new float2(0.125f, 0), new float2(0.25f, 0), new float2(0.325f, 0), new float2(0.5f, 0), new float2(0.625f, 0), new float2(0.75f, 0), new float2(0.825f, 0f), new float2(1f, 0f), new float2(1f, 0.125f), new float2(1, 0.25f), new float2(1, 0.325f), new float2(1, 0.5f), new float2(1, 0.625f), new float2(1, 0.75f), new float2(1, 0.825f) };
             for (int i=0; i < MaxIteration; i++) {
                 int l = Triangles.Length;
                 for (int index = 0; index < l; index++)
@@ -71,7 +95,8 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                     float3 pc = Vertices[Triangles[index].Index2].Position;
                     // now that i think about it this normalization might not be usefull at all
                     float3 m = math.normalize((pa + pb + pc) / 3); // middle point / average (The first few itarations have points real far away , and taking the average is important (we might be able to skip this for higher iterations when triangles are smaller))
-                    if ((math.dot(campos, m) < -0.1) && (i > 4)) { continue; }  // Dont divide back side (backside is  dot()<0 but we might want a little bit of the back side for the triangles near the back side that share verticies of the backside)
+                    
+                    if (((math.dot(campos, m) < backsideLimit) && (i >= backsideIterations))) { continue; }  // Dont divide back side (backside is  dot()<0 but we might want a little bit of the back side for the triangles near the back side that share verticies of the backside)
 
                     Vector3 newp = math.normalize((pa + pb) / 2); // Point that splits triangles     
                     newp = changeHeight(newp);
@@ -84,12 +109,12 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
 
                     // If we want to get rid of the T shaped emm... holes ? We could assign 1 interger to each vertices that correspond to the LOWEST level of iteration that this point is part of (between the 4 triangles that share him) , and we could make it so that we only divide a triangle if both of his points (we dont care about the 3rd one) have a level of iteration just one layer above the one currently doin' 
                     int p;
-                    if(true) //(!VertexToIndex.TryGetValue(newp, out p))
+                    if(true)//!VertexToIndex.TryGetValue(newp, out p))// || !deleteRepetedVertex) // this seems like to work somewhat but i moved this part that delete repeted vertex in the monobehaviour script for it to be more clear (bringing it back here could help perf)
                     {
                         // IMPORTANT TO DO
                         // I need a systeme where sometimes it ignores the dot() depending on how many levels it should be displaying 
                         // ADDING THIS CAN HELP A LOT PERFORMANCES BUT GOOD LUCK MAKING THIS WORK **WELL** (it's supose to detect if a point is before or  after the horizon)
-                        //if (math.dot(campos - newp, newp) < v1 && (i > v2)) { continue; } //v1 default = 0 , v2 default somthing like 4 
+                        if (math.dot(campos - newp, newp) < overhorizonLimit && (i >= overhorizonIterations) && (overhorizonLimit2 <= d)) { continue; } //v1 default = 0 , v2 default somthing like 4 
                         if (!doBissect(distance: d, iteration: i)) { continue; } // If dont generate then dont
 
                         // if we dont care about camera distance and that ALL triangles are cut in half then we woudn't need an dict to find out if point have been created , we know if it have been or not depending if we are in the first or second half of the loop
@@ -97,7 +122,10 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                         // ALSO if I used a structure that holds empty slots for places where there could be an point we could also find easily the point without a dict (something like a binary tree i think) - from (1.1,2,1.2) to (1,1,1,0) I just dont know if using much bigger varrialbe with lots of empty values is a good idea
                         p = Vertices.Length;
                         VertexToIndex[newp] = p;
-                        Vertices.Add(new Vertex { Position = newp });
+
+                        
+                        Vertices.Add(new Vertex { Position = newp, UV = t[i] }) ; // this colors the planet according to iteration count (debug purpurse) // actually no it didnt help me yet and i dont see how it will but it is cool to see so ....
+                        //Vertices.Add(new Vertex { Position = newp , UV = new float2(0, Mathf.Pow(Vector3.Magnitude(newp) - floorheight, 3)) }); // this is for debug purpurse colors the uv map according to height
                     }
                     // We need to destroy (write over 1) the old triangle and add 2 new triangles (add 1) 
                     Triangles.Add(     new Triangle { Index0 = Triangles[index].Index1, Index1 = Triangles[index].Index2, Index2 = (short)p });
@@ -114,7 +142,6 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
 
         private float3 changeHeight(float3 point)
         {
-
             float noiseToAdd = 0;
             float r = roughtness;
             float s = strenght;
