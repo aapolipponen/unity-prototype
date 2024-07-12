@@ -258,8 +258,9 @@ MonoBehaviour:
   SpeedRotateX: 0.25
   SpeedRotateY: 0.12
   SpeedPan: 0
-  SpeedZoom: 10
-  Distance: 0
+  SpeedZoom: 2
+  ZoomMax: 100
+  Distance: 200
   MainCamera: {fileID: 528478902}
   PivotArm: {fileID: 1947880720}
 --- !u!4 &305680983
@@ -529,13 +530,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 556617077}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
-  m_LocalPosition: {x: 0, y: 3, z: 0}
+  m_LocalRotation: {x: 0.38268343, y: 0, z: 0, w: 0.92387956}
+  m_LocalPosition: {x: 0, y: 5, z: -5}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+  m_LocalEulerAnglesHint: {x: 45, y: 0, z: 0}
 --- !u!1 &998906015
 GameObject:
   m_ObjectHideFlags: 0
@@ -595,11 +596,13 @@ MonoBehaviour:
   - distance: 0.0625
     iteration: 13
   deleteRepetedVertex: 0
-  backsideIterations: 0
+  backsideIterations: 2
   backsideLimit: -0.1
-  overhorizonIterations: 3
+  overhorizonIterations: 4
   overhorizonLimit: 0
   overhorizonLimit2: 0.5
+  radius: 1
+  water: {fileID: 234636551}
   parameter:
     floorheight: 0.77
     layernumber: 3

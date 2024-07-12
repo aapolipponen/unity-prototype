@@ -10,7 +10,7 @@ public class OrbitalCamera : MonoBehaviour, InputSystem_Actions.ICameraActions {
     public float SpeedRotateY = 2.4f * 0.05f;
     public float SpeedPan = 0.5f;
     public float SpeedZoom = 10f;
-
+    public float ZoomMax= 100;
     public float Distance;
 
     public Transform MainCamera;
@@ -46,7 +46,7 @@ public class OrbitalCamera : MonoBehaviour, InputSystem_Actions.ICameraActions {
     public void OnCameraZoom(InputAction.CallbackContext context) {
         var delta = Mathf.Clamp(context.ReadValue<float>(), -1, 1); // either 120 or 1?
         var zoom = delta * Distance * SpeedZoom * Time.unscaledDeltaTime;
-        Distance = Mathf.Clamp(Distance + zoom, 1.1f, 100);
+        Distance = Mathf.Clamp(Distance + zoom, 1.1f, ZoomMax);
         MainCamera.transform.localPosition = new(0, 0, -Distance);
     }
 

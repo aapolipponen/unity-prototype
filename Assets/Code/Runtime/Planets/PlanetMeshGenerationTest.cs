@@ -43,6 +43,8 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
         public float overhorizonLimit;
         public float overhorizonLimit2;
 
+        public float radius;
+        public GameObject water;
         public parameters parameter;
 
         private NativeList<int> renderIterations;
@@ -52,6 +54,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
         private NativeHashMap<float3, int> vertexToIndex;
         private Vector3 lastpos;
 
+        public NativeList<int> iterationMinimumPerVertex;
         [System.Serializable]
         public class RenderDistance
         {
@@ -89,7 +92,8 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             vertexToIndex = new NativeHashMap<float3, int>(23000, Allocator.Persistent);
             renderIterations = new NativeList<int>(Allocator.Persistent);
             renderDistances = new NativeList<float>(Allocator.Persistent);
-            
+            iterationMinimumPerVertex = new NativeList<int>(Allocator.Persistent);
+
         }
 
         private void OnDestroy()
@@ -114,7 +118,9 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
         {
             if (!ConstantUpdate) { if (lastpos == cameraPosition.position) return; }
             lastpos = cameraPosition.position;
-            
+
+            water.GetComponent<Transform>().localScale = new Vector3(2.05f* radius, 2.05f * radius, 2.05f * radius);
+
             vertices.Clear();
             triangles.Clear();
             vertexToIndex.Clear();
@@ -153,8 +159,10 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                 overhorizonIterations = overhorizonIterations,
                 overhorizonLimit = overhorizonLimit,
                 overhorizonLimit2 = overhorizonLimit2,
+                IterationMinimumPerVertex = iterationMinimumPerVertex,
+                Radius= radius,
 
-    };
+            };
             job.Run();
 
             if (deleteRepetedVertex)
@@ -300,7 +308,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                 c += parameter.centerOffset;
             }
             noiseToAdd = Mathf.Max(0, noiseToAdd - parameter.floorheight);
-            return (noiseToAdd + 1) * Vector3.Normalize(point) * 1;
+            return (noiseToAdd + 1) * Vector3.Normalize(point) * radius;
         }
     }
 }
