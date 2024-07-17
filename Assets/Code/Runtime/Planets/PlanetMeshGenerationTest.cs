@@ -12,6 +12,7 @@ using UnityEditor.Build;
 using Unity.Mathematics;
 using UnityEngine.Rendering;
 using static PLE.Prototype.Runtime.Code.Runtime.Planets.PlanetMeshGenerationTest;
+using Codice.Client.BaseCommands.BranchExplorer;
 
 namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 {
@@ -25,15 +26,21 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 
         public Transform cameraPosition;
         public bool ConstantUpdate; // If not then update only when cam pos changes
-
+        [Range(0,3)]
+        public int chunks = 0; // if this is changed while running the variables would need to be reset // so dont change it when running now
         private Mesh mesh;
         private GameObject previewGameObject;
-        
+        private GameObject[] previewGameObjects;
+        private Mesh[] meshs;
+        private NativeList<NativeList<Vertex>> verticess;
+        private NativeList<NativeList<Triangle>> triangless;
+        private NativeList<NativeHashMap<float3, int>> vertexToIndexs;
+
         [Range(0,15)]
         public int MaxIteration;
         public RenderDistance[] renderDistancesInput;
 
-        public bool deleteRepetedVertex;
+        public bool deleteRepetedVertex; // this dont work anymore
 
         [Range(0,15)]
         public int backsideIterations;
@@ -94,6 +101,23 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             renderDistances = new NativeList<float>(Allocator.Persistent);
             iterationMinimumPerVertex = new NativeList<int>(Allocator.Persistent);
 
+
+            verticess = new NativeList<NativeList<Vertex>>(Allocator.Persistent);
+            triangless = new NativeList<NativeList<Triangle>>(Allocator.Persistent);
+            vertexToIndexs = new NativeList<NativeHashMap<float3, int>>(10000, Allocator.Persistent); // Idk what the value for 10k should be
+
+
+            previewGameObjects = new GameObject[(int)(Math.Pow(2, chunks) * 12)];
+            for (int i = 0; i < Math.Pow(2, chunks) *12 ; i++)
+            {
+                previewGameObjects[i] = new GameObject(nameof(PlanetMeshGenerationTest));
+                previewGameObjects[i].AddComponent<MeshFilter>();
+                previewGameObjects[i].AddComponent<MeshRenderer>();
+                triangless.Add( new NativeList<Triangle>(Allocator.Persistent));
+                verticess.Add(new NativeList<Vertex>(Allocator.Persistent));
+                vertexToIndexs.Add( new NativeHashMap<float3, int>(10000, Allocator.Persistent));
+            }
+            meshs = new Mesh[(int)(Math.Pow(2, chunks) * 12)];
         }
 
         private void OnDestroy()
@@ -104,6 +128,11 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             if(previewGameObject)
                 Destroy(previewGameObject);
             
+            foreach (var gameo in previewGameObjects)
+            {
+                if(gameo)
+                    Destroy(gameo);
+            }
             //if(debugMaterial)
             //    Destroy(debugMaterial);
 
@@ -121,6 +150,12 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 
             water.GetComponent<Transform>().localScale = new Vector3(2.05f* radius, 2.05f * radius, 2.05f * radius);
 
+            for (int i = 0; i < Math.Pow(2, chunks) * 12; i++)
+            {
+                verticess[i].Clear();
+                triangless[i].Clear();
+                vertexToIndexs[i].Clear();
+            }
             vertices.Clear();
             triangles.Clear();
             vertexToIndex.Clear();
@@ -132,19 +167,21 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                 renderDistances.Add(value.distance);
                 renderIterations.Add(value.iteration);
             }
+            
+
 
             initializeVariables(triangles: ref triangles,vertices: ref vertices, vertexToIndex: ref vertexToIndex);
-
-            //EntityManager manager = World.DefaultGameObjectInjectionWorld.EntityManager;
+            
+            // divide
             var job = new PlanetMeshGenerationJob
             {
                 Vertices = vertices,
                 Triangles = triangles,
-                MaxIteration = MaxIteration,
+                MaxIteration = chunks,
                 campos = cameraPosition.position,
                 roughtness = parameter.roughtness,
-                strenght =  parameter.strenght,
-                center = parameter.center,  
+                strenght = parameter.strenght,
+                center = parameter.center,
                 layernumber = parameter.layernumber,
                 roughtnesschange = parameter.roughtnesschange,
                 strenghtchange = parameter.strenghtchange,
@@ -160,12 +197,115 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                 overhorizonLimit = overhorizonLimit,
                 overhorizonLimit2 = overhorizonLimit2,
                 IterationMinimumPerVertex = iterationMinimumPerVertex,
-                Radius= radius,
+                Radius = radius,
+                mp = float3.zero
 
             };
             job.Run();
+            
 
-            if (deleteRepetedVertex)
+            for (int i = 0; i < Math.Pow(2, chunks) * 12; i++)
+            {
+                if (!previewGameObjects[i]) { continue; }
+
+                triangless[i].Add(new Triangle { Index0 = 0, Index1 = 1, Index2 = 2 });
+                verticess[i].Add(vertices[triangles[i].Index0]);
+                verticess[i].Add(vertices[triangles[i].Index1]);
+                verticess[i].Add(vertices[triangles[i].Index2]);
+
+                float3 mp = (verticess[i][0].Position + verticess[i][1].Position + verticess[i][2].Position) / 3;
+
+                bool thing = !(math.dot(cameraPosition.position, mp) < 0);
+                previewGameObjects[i].SetActive(thing);
+                if (!thing) { continue; }
+                job = new PlanetMeshGenerationJob
+                {
+                    Vertices = verticess[i],
+                    Triangles = triangless[i],
+                    MaxIteration = MaxIteration,
+                    campos = cameraPosition.position,
+                    roughtness = parameter.roughtness,
+                    strenght = parameter.strenght,
+                    center = parameter.center,
+                    layernumber = parameter.layernumber,
+                    roughtnesschange = parameter.roughtnesschange,
+                    strenghtchange = parameter.strenghtchange,
+                    centerOffset = parameter.centerOffset,
+                    VertexToIndex = vertexToIndexs[i],
+                    floorheight = parameter.floorheight,
+                    deleteRepetedVertex = deleteRepetedVertex,
+                    renderDistances = renderDistances,
+                    renderIterations = renderIterations,
+                    backsideLimit = backsideLimit,
+                    backsideIterations = backsideIterations,
+                    overhorizonIterations = overhorizonIterations,
+                    overhorizonLimit = overhorizonLimit,
+                    overhorizonLimit2 = overhorizonLimit2,
+                    IterationMinimumPerVertex = iterationMinimumPerVertex,
+                    Radius = radius,
+                    mp=mp
+
+                };
+                job.Run();
+                /*
+                if (deleteRepetedVertex)
+                {
+                    for (int k = 0; k < triangless[i].Length; k++)
+                    {
+                        int p;
+                        var vj = triangless[i];
+                        var v = vj[k];
+                        if (vertexToIndexs[i].TryGetValue(verticess[i][v.Index0].Position, out p)) { v.Index0 = (short)p; }
+                        if (vertexToIndexs[i].TryGetValue(verticess[i][v.Index1].Position, out p)) { v.Index1 = (short)p; }
+                        if (vertexToIndexs[i].TryGetValue(verticess[i][v.Index2].Position, out p)) { v.Index2 = (short)p; }
+                        vj[k] = v;
+                        triangless[i] = vj;
+                    }
+                }*/
+
+                if (!meshs[i]) // I've changed this so that the mesh is reused instead of recreated :) ~UnknownDude
+                    meshs[i] = new Mesh();
+                var meshDataArrayi = Mesh.AllocateWritableMeshData(meshs[i]);
+                var meshDatai = meshDataArrayi[0];
+
+                // Configure mesh data
+                var vertexAttributeDescriptori = CreateVertexAttributeDescriptor();
+                meshDatai.SetVertexBufferParams(verticess[i].Length, vertexAttributeDescriptori);
+                meshDatai.SetIndexBufferParams(triangless[i].Length * 3, IndexFormat.UInt16);
+
+                // Apply Vertices 
+                var vertexBufferi = meshDatai.GetVertexData<Vertex>();
+                UnsafeUtility.MemCpy(vertexBufferi.GetUnsafePtr(), verticess[i].GetUnsafeReadOnlyPtr(), (long)verticess[i].Length * UnsafeUtility.SizeOf<Vertex>());
+
+                // Apply Indices
+                var indexBufferi = meshDatai.GetIndexData<short>();
+                UnsafeUtility.MemCpy(indexBufferi.GetUnsafePtr(), triangless[i].GetUnsafeReadOnlyPtr(), (long)triangless[i].Length * UnsafeUtility.SizeOf<Triangle>());
+
+                // Configure sub mesh
+                var subMeshi = new SubMeshDescriptor(0, triangless[i].Length * 3)
+                {
+                    topology = MeshTopology.Triangles,
+                    vertexCount = verticess[i].Length
+                };
+                meshDatai.subMeshCount = 1;
+                meshDatai.SetSubMesh(0, subMeshi);
+
+                Mesh.ApplyAndDisposeWritableMeshData(meshDataArrayi, meshs[i]);
+
+
+                meshs[i].RecalculateBounds();
+                meshs[i].RecalculateNormals();
+                meshs[i].RecalculateTangents();
+                previewGameObjects[i].GetComponent<MeshFilter>().sharedMesh = meshs[i];
+                if (ShaderOrMaterial)
+                    previewGameObjects[i].GetComponent<MeshRenderer>().sharedMaterial = Material;
+                else
+                    previewGameObjects[i].GetComponent<MeshRenderer>().sharedMaterial = new Material(debugShader);
+                previewGameObjects[i].GetComponent<Transform>().position = mp;
+                
+            }
+            /*
+                         if (deleteRepetedVertex)
             {
                 for (int i = 0; i < triangles.Length; i++)
                 {
@@ -177,47 +317,9 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                     triangles[i] = v;
                 }
             }
-            if(!mesh) // I've changed this so that the mesh is reused instead of recreated :) ~UnknownDude
-                mesh = new Mesh();
-            
-            var meshDataArray = Mesh.AllocateWritableMeshData(mesh);
-            var meshData = meshDataArray[0];
-            
-            // Configure mesh data
-            var vertexAttributeDescriptor = CreateVertexAttributeDescriptor();
-            meshData.SetVertexBufferParams(vertices.Length, vertexAttributeDescriptor);
-            meshData.SetIndexBufferParams(triangles.Length * 3, IndexFormat.UInt16);
-            
-            // Apply Vertices 
-            var vertexBuffer = meshData.GetVertexData<Vertex>();
-            UnsafeUtility.MemCpy(vertexBuffer.GetUnsafePtr(), vertices.GetUnsafeReadOnlyPtr(), (long)vertices.Length * UnsafeUtility.SizeOf<Vertex>());
-
-            // Apply Indices
-            var indexBuffer = meshData.GetIndexData<short>();
-            UnsafeUtility.MemCpy(indexBuffer.GetUnsafePtr(), triangles.GetUnsafeReadOnlyPtr(), (long)triangles.Length * UnsafeUtility.SizeOf<Triangle>());
-
-            // Configure sub mesh
-            var subMesh = new SubMeshDescriptor(0, triangles.Length * 3)
-            {
-                topology = MeshTopology.Triangles,
-                vertexCount = vertices.Length
-            };
-            meshData.subMeshCount = 1;
-            meshData.SetSubMesh(0, subMesh);
-        
-            Mesh.ApplyAndDisposeWritableMeshData(meshDataArray, mesh);
-            
-            
-            mesh.RecalculateBounds();
-            mesh.RecalculateNormals();
-            mesh.RecalculateTangents();
-            previewGameObject.GetComponent<MeshFilter>().sharedMesh = mesh;
-            if (ShaderOrMaterial)
-                previewGameObject.GetComponent<MeshRenderer>().sharedMaterial = Material;
-            else
-                previewGameObject.GetComponent<MeshRenderer>().sharedMaterial = new Material(debugShader);
+            */
         }
-        
+
         private NativeArray<VertexAttributeDescriptor> CreateVertexAttributeDescriptor()
         {
             return new NativeArray<VertexAttributeDescriptor>(4, Allocator.Temp)

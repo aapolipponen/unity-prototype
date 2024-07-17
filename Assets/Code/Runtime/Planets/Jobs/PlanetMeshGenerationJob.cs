@@ -56,11 +56,18 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
         [ReadOnly] public float overhorizonLimit2;
 
         [ReadOnly] public float Radius;
+        [ReadOnly] public float3 mp;
 
         public NativeList<int> IterationMinimumPerVertex; // which index should correspond to the ones in "Vertices"
         
         public void Execute()
         {
+            for (int i = 0; i < 3; i++)
+            {
+                var v = Vertices[i];
+                v.Position -= mp;
+                Vertices[i] = v;
+            }
             // This is for the uv texture (will color different iterations)
             var t = new NativeList<float2>(Allocator.TempJob){new float2(0, 0), new float2(0.125f, 0), new float2(0.25f, 0), new float2(0.325f, 0), new float2(0.5f, 0), new float2(0.625f, 0), new float2(0.75f, 0), new float2(0.825f, 0f), new float2(1f, 0f), new float2(1f, 0.125f), new float2(1, 0.25f), new float2(1, 0.325f), new float2(1, 0.5f), new float2(1, 0.625f), new float2(1, 0.75f), new float2(1, 0.825f) };
             
@@ -68,7 +75,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                 int l = Triangles.Length;
                 for (int index = 0; index < l; index++)
                 {
-                    Vector3 newPoint = CreateMiddlePoint(Vertices[Triangles[index].Index0].Position, Vertices[Triangles[index].Index1].Position);
+                    Vector3 newPoint = CreateMiddlePoint(Vertices[Triangles[index].Index0].Position+mp, Vertices[Triangles[index].Index1].Position+mp);
                     int p;
                     // If the triangle is already devided devide it (if there is a point in the middle of the hypotenus) if not then create the new point and then divide it
                     if (true)//!VertexToIndex.TryGetValue(newp, out p))// || !deleteRepetedVertex) // this seems like to work somewhat but i moved this part that delete repeted vertex in the monobehaviour script for it to be more clear (bringing it back here could help perf)
@@ -81,7 +88,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                         p = Vertices.Length;
                         VertexToIndex[newPoint] = p;
                         
-                        Vertices.Add(new Vertex { Position = newPoint, UV = t[i] }) ; // this colors the planet according to iteration count (debug purpurse) // actually no it didnt help me yet and i dont see how it will but it is cool to see so ....
+                        Vertices.Add(new Vertex { Position = newPoint-(Vector3)mp, UV = t[i] }) ; // this colors the planet according to iteration count (debug purpurse) // actually no it didnt help me yet and i dont see how it will but it is cool to see so ....
                         //Vertices.Add(new Vertex { Position = newp , UV = new float2(0, Mathf.Pow(Vector3.Magnitude(newp) - floorheight, 3)) }); // this is for debug purpurse colors the uv map according to height
                     }
                     // We need to destroy (write over 1) the old triangle and add 2 new triangles (add 1) 
@@ -90,6 +97,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
 
                 }
             }
+            
         }
 
         private bool doNotBissect(float distance, int iteration, Vector3 point)
