@@ -3,33 +3,26 @@ using PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs;
 using Unity.Jobs;
 using UnityEngine;
 using Unity.Entities;
-using Unity.VisualScripting.YamlDotNet.Core.Tokens;
 using Unity.Collections;
-using System.Linq;
 using PLE.Prototype.Runtime.Code.Runtime.Planets.Data;
 using Unity.Collections.LowLevel.Unsafe;
-using UnityEditor.Build;
 using Unity.Mathematics;
 using UnityEngine.Rendering;
-using static PLE.Prototype.Runtime.Code.Runtime.Planets.PlanetMeshGenerationTest;
-using Codice.Client.BaseCommands.BranchExplorer;
 
 namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 {
     // This class is only for testing, it isn't ECS and also not a proper unit test
     public class PlanetMeshGenerationTest : MonoBehaviour
     {
-        [SerializeField]
         public Material Material;
         public Shader debugShader;
         public bool ShaderOrMaterial;
 
         public Transform cameraPosition;
         public bool ConstantUpdate; // If not then update only when cam pos changes
-        [Range(0,3)]
-        public int chunks = 0; // if this is changed while running the variables would need to be reset // so dont change it when running now
-        private Mesh mesh;
-        private GameObject previewGameObject;
+        [Range(0,2)]
+        public int chunks = 0;
+        private int lastchunk = 0;
         private GameObject[] previewGameObjects;
         private Mesh[] meshs;
         private NativeList<NativeList<Vertex>> verticess;
@@ -52,7 +45,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 
         public float radius;
         public GameObject water;
-        public parameters parameter;
+        public Parameters parameter;
 
         private NativeList<int> renderIterations;
         private NativeList<float> renderDistances;
@@ -61,7 +54,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
         private NativeHashMap<float3, int> vertexToIndex;
         private Vector3 lastpos;
 
-        public NativeList<int> iterationMinimumPerVertex;
+        //public NativeList<int> iterationMinimumPerVertex;
         [System.Serializable]
         public class RenderDistance
         {
@@ -72,7 +65,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 
 
         [System.Serializable]
-        public class parameters
+        public class Parameters
         {
             public float floorheight;
             [Range(1, 10)]
@@ -90,21 +83,17 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             public float3 centerOffset;
         }
         private void Start() {
-            previewGameObject = new GameObject(nameof(PlanetMeshGenerationTest));
-            previewGameObject.AddComponent<MeshFilter>();
-            previewGameObject.AddComponent<MeshRenderer>();
-
             vertices = new NativeList<Vertex>(Allocator.Persistent);
             triangles = new NativeList<Triangle>(Allocator.Persistent);
-            vertexToIndex = new NativeHashMap<float3, int>(23000, Allocator.Persistent);
+            vertexToIndex = new NativeHashMap<float3, int>(1000, Allocator.Persistent);
             renderIterations = new NativeList<int>(Allocator.Persistent);
             renderDistances = new NativeList<float>(Allocator.Persistent);
-            iterationMinimumPerVertex = new NativeList<int>(Allocator.Persistent);
+            //iterationMinimumPerVertex = new NativeList<int>(Allocator.Persistent);
 
 
             verticess = new NativeList<NativeList<Vertex>>(Allocator.Persistent);
             triangless = new NativeList<NativeList<Triangle>>(Allocator.Persistent);
-            vertexToIndexs = new NativeList<NativeHashMap<float3, int>>(10000, Allocator.Persistent); // Idk what the value for 10k should be
+            vertexToIndexs = new NativeList<NativeHashMap<float3, int>>(Allocator.Persistent);
 
 
             previewGameObjects = new GameObject[(int)(Math.Pow(2, chunks) * 12)];
@@ -115,18 +104,18 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                 previewGameObjects[i].AddComponent<MeshRenderer>();
                 triangless.Add( new NativeList<Triangle>(Allocator.Persistent));
                 verticess.Add(new NativeList<Vertex>(Allocator.Persistent));
-                vertexToIndexs.Add( new NativeHashMap<float3, int>(10000, Allocator.Persistent));
+                vertexToIndexs.Add( new NativeHashMap<float3, int>(10000, Allocator.Persistent)); // pls double check this 10k value 
             }
             meshs = new Mesh[(int)(Math.Pow(2, chunks) * 12)];
         }
 
         private void OnDestroy()
         {
-            if(mesh)
-                Destroy(mesh);
-            
-            if(previewGameObject)
-                Destroy(previewGameObject);
+            foreach (var mesh in meshs)
+            {
+                if (mesh)
+                    Destroy(mesh);
+            } 
             
             foreach (var gameo in previewGameObjects)
             {
@@ -135,19 +124,30 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             }
             //if(debugMaterial)
             //    Destroy(debugMaterial);
-
             vertices.Dispose();
             triangles.Dispose();
             vertexToIndex.Dispose();
             renderDistances.Dispose();
             renderIterations.Dispose();
+            for (int i = 0; i < Math.Pow(2, lastchunk) * 12; i++)
+            {
+                triangless[i].Dispose();
+                verticess[i].Dispose();
+                vertexToIndexs[i].Dispose();
+            }
+            triangless.Dispose();
+            verticess.Dispose();
+            vertexToIndexs.Dispose();
         }
 
+
+        // The vertices and Triangles variables are not updated in each update (but i am still recalculating them), i could put them in start but then when I want to dynamicly change variables to edit the planet's shape it wont update them
         private unsafe void Update()
         {
             if (!ConstantUpdate) { if (lastpos == cameraPosition.position) return; }
+            if (lastchunk != chunks) { OnDestroy(); Start(); }
             lastpos = cameraPosition.position;
-
+            lastchunk = chunks;
             water.GetComponent<Transform>().localScale = new Vector3(2.05f* radius, 2.05f * radius, 2.05f * radius);
 
             for (int i = 0; i < Math.Pow(2, chunks) * 12; i++)
@@ -170,39 +170,45 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             
 
 
-            initializeVariables(triangles: ref triangles,vertices: ref vertices, vertexToIndex: ref vertexToIndex);
+            InitializeVariables(triangles: ref triangles,vertices: ref vertices, vertexToIndex: ref vertexToIndex);
             
             // divide
             var job = new PlanetMeshGenerationJob
             {
-                Vertices = vertices,
-                Triangles = triangles,
-                MaxIteration = chunks,
-                campos = cameraPosition.position,
-                roughtness = parameter.roughtness,
-                strenght = parameter.strenght,
-                center = parameter.center,
-                layernumber = parameter.layernumber,
-                roughtnesschange = parameter.roughtnesschange,
-                strenghtchange = parameter.strenghtchange,
-                centerOffset = parameter.centerOffset,
+                Vertices      = vertices,
+                Triangles     = triangles,
                 VertexToIndex = vertexToIndex,
-                floorheight = parameter.floorheight,
-                deleteRepetedVertex = deleteRepetedVertex,
-                renderDistances = renderDistances,
-                renderIterations = renderIterations,
-                backsideLimit = backsideLimit,
-                backsideIterations = backsideIterations,
-                overhorizonIterations = overhorizonIterations,
-                overhorizonLimit = overhorizonLimit,
-                overhorizonLimit2 = overhorizonLimit2,
-                IterationMinimumPerVertex = iterationMinimumPerVertex,
-                Radius = radius,
-                mp = float3.zero
 
+                renderIterations = renderIterations,
+                renderDistances  = renderDistances,
+
+                MaxIteration = chunks,
+
+                campos = cameraPosition.position,
+
+                floorheight      = parameter.floorheight,
+                strenght         = parameter.strenght,
+                roughtness       = parameter.roughtness,
+                center           = parameter.center,
+                centerOffset     = parameter.centerOffset,
+                layernumber      = parameter.layernumber,
+                roughtnesschange = parameter.roughtnesschange,
+                strenghtchange   = parameter.strenghtchange,
+
+                deleteRepetedVertex = deleteRepetedVertex,
+
+                backsideIterations = backsideIterations,
+                backsideLimit = backsideLimit,
+
+                overhorizonIterations   = overhorizonIterations,
+                overhorizonLimit        = overhorizonLimit,
+                overhorizonLimit2       = overhorizonLimit2,
+
+                Radius = radius,
+                mp = float3.zero,
             };
             job.Run();
-            
+
 
             for (int i = 0; i < Math.Pow(2, chunks) * 12; i++)
             {
@@ -214,37 +220,46 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                 verticess[i].Add(vertices[triangles[i].Index2]);
 
                 float3 mp = (verticess[i][0].Position + verticess[i][1].Position + verticess[i][2].Position) / 3;
+                mp = ChangeHeight(mp);
 
                 bool thing = !(math.dot(cameraPosition.position, mp) < 0);
                 previewGameObjects[i].SetActive(thing);
                 if (!thing) { continue; }
+
+                
                 job = new PlanetMeshGenerationJob
                 {
-                    Vertices = verticess[i],
-                    Triangles = triangless[i],
-                    MaxIteration = MaxIteration,
-                    campos = cameraPosition.position,
-                    roughtness = parameter.roughtness,
-                    strenght = parameter.strenght,
-                    center = parameter.center,
-                    layernumber = parameter.layernumber,
-                    roughtnesschange = parameter.roughtnesschange,
-                    strenghtchange = parameter.strenghtchange,
-                    centerOffset = parameter.centerOffset,
-                    VertexToIndex = vertexToIndexs[i],
-                    floorheight = parameter.floorheight,
-                    deleteRepetedVertex = deleteRepetedVertex,
-                    renderDistances = renderDistances,
+                    Vertices        = verticess[i],
+                    Triangles       = triangless[i],
+                    VertexToIndex   = vertexToIndexs[i],
+
                     renderIterations = renderIterations,
-                    backsideLimit = backsideLimit,
+                    renderDistances  = renderDistances,
+
+                    MaxIteration = MaxIteration,
+
+                    campos = cameraPosition.position,
+
+                    floorheight         = parameter.floorheight,
+                    strenght            = parameter.strenght,
+                    roughtness          = parameter.roughtness,
+                    center              = parameter.center,
+                    centerOffset        = parameter.centerOffset,
+                    layernumber         = parameter.layernumber,
+                    roughtnesschange    = parameter.roughtnesschange,
+                    strenghtchange      = parameter.strenghtchange,
+
+                    deleteRepetedVertex = deleteRepetedVertex,
+
                     backsideIterations = backsideIterations,
+                    backsideLimit = backsideLimit,
+
                     overhorizonIterations = overhorizonIterations,
                     overhorizonLimit = overhorizonLimit,
                     overhorizonLimit2 = overhorizonLimit2,
-                    IterationMinimumPerVertex = iterationMinimumPerVertex,
-                    Radius = radius,
-                    mp=mp
 
+                    Radius = radius,
+                    mp = mp,
                 };
                 job.Run();
                 /*
@@ -332,21 +347,21 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             };
         }
 
-        private void initializeVariables(ref NativeList<Triangle> triangles, ref NativeList<Vertex> vertices, ref NativeHashMap<float3,int> vertexToIndex) {
+        private void InitializeVariables(ref NativeList<Triangle> triangles, ref NativeList<Vertex> vertices, ref NativeHashMap<float3,int> vertexToIndex) {
 
 
-            setDefaultCube(ref triangles, ref vertices);
+            SetDefaultCube(ref triangles, ref vertices);
 
             for (int id = 0; id < vertices.Length; id++)
             {
                 Vertex x = vertices[id];
-                x.Position = changeHeight(x.Position);
+                x.Position = ChangeHeight(x.Position);
                 vertices[id] = x;
                 vertexToIndex[x.Position] = id;
             }
         }
 
-        private void setDefaultCube(ref NativeList<Triangle> triangles, ref NativeList<Vertex> vertices)
+        private void SetDefaultCube(ref NativeList<Triangle> triangles, ref NativeList<Vertex> vertices)
         {
             // TOP   FRONT  BACK    RIGHT   LEFT (Views)
             // 20    02     64      40      26  
@@ -395,7 +410,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             return (Mathf.PerlinNoise(point.x, point.y) + Mathf.PerlinNoise(point.y, point.x) + Mathf.PerlinNoise(point.z, point.y) + Mathf.PerlinNoise(point.y, point.z) + Mathf.PerlinNoise(point.z, point.x) + Mathf.PerlinNoise(point.x, point.z)) / 6;
         }
 
-        private float3 changeHeight(float3 point)
+        private float3 ChangeHeight(float3 point)
         {
 
             float noiseToAdd = 0;
@@ -410,7 +425,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
                 c += parameter.centerOffset;
             }
             noiseToAdd = Mathf.Max(0, noiseToAdd - parameter.floorheight);
-            return (noiseToAdd + 1) * Vector3.Normalize(point) * radius;
+            return (noiseToAdd + 1) * radius * Vector3.Normalize(point);
         }
     }
 }

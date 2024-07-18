@@ -571,6 +571,7 @@ MonoBehaviour:
   ShaderOrMaterial: 1
   cameraPosition: {fileID: 528478902}
   ConstantUpdate: 1
+  chunks: 1
   MaxIteration: 15
   renderDistancesInput:
   - distance: Infinity

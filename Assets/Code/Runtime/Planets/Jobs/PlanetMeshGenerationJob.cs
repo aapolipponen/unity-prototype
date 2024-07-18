@@ -1,26 +1,9 @@
-﻿using JetBrains.Annotations;
-using PlasticPipe.PlasticProtocol.Messages;
-using PLE.Prototype.Runtime.Code.Runtime.Planets.Data;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Linq.Expressions;
-using System.Text.RegularExpressions;
+﻿using PLE.Prototype.Runtime.Code.Runtime.Planets.Data;
 using Unity.Burst;
-using Unity.Burst.Intrinsics;
 using Unity.Collections;
-using Unity.Collections.LowLevel.Unsafe;
-using Unity.Entities;
-using Unity.Entities.UniversalDelegates;
 using Unity.Jobs;
 using Unity.Mathematics;
-using UnityEditor.PackageManager;
 using UnityEngine;
-using UnityEngine.Rendering;
-
-using static Unity.Entities.EntitiesJournaling;
-using static UnityEditor.MaterialProperty;
-using static UnityEngine.UIElements.UxmlAttributeDescription;
 
 namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
 {
@@ -58,7 +41,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
         [ReadOnly] public float Radius;
         [ReadOnly] public float3 mp;
 
-        public NativeList<int> IterationMinimumPerVertex; // which index should correspond to the ones in "Vertices"
+        //public NativeList<int> IterationMinimumPerVertex; // which index should correspond to the ones in "Vertices"
         
         public void Execute()
         {
@@ -69,7 +52,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                 Vertices[i] = v;
             }
             // This is for the uv texture (will color different iterations)
-            var t = new NativeList<float2>(Allocator.TempJob){new float2(0, 0), new float2(0.125f, 0), new float2(0.25f, 0), new float2(0.325f, 0), new float2(0.5f, 0), new float2(0.625f, 0), new float2(0.75f, 0), new float2(0.825f, 0f), new float2(1f, 0f), new float2(1f, 0.125f), new float2(1, 0.25f), new float2(1, 0.325f), new float2(1, 0.5f), new float2(1, 0.625f), new float2(1, 0.75f), new float2(1, 0.825f) };
+            var t = new NativeList<float2>(Allocator.TempJob){new(0, 0), new(0.125f, 0), new(0.25f, 0), new(0.325f, 0), new(0.5f, 0), new(0.625f, 0), new(0.75f, 0), new(0.825f, 0f), new(1f, 0f), new(1f, 0.125f), new(1, 0.25f), new(1, 0.325f), new(1, 0.5f), new(1, 0.625f), new(1, 0.75f), new(1, 0.825f) };
             
             for (int i=0; i < MaxIteration; i++) {
                 int l = Triangles.Length;
@@ -80,7 +63,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                     // If the triangle is already devided devide it (if there is a point in the middle of the hypotenus) if not then create the new point and then divide it
                     if (true)//!VertexToIndex.TryGetValue(newp, out p))// || !deleteRepetedVertex) // this seems like to work somewhat but i moved this part that delete repeted vertex in the monobehaviour script for it to be more clear (bringing it back here could help perf)
                     {
-                        if (doNotBissect(distance: (campos - newPoint).magnitude, iteration: i, point:newPoint)) { continue; } // If dont generate then dont
+                        if (DoNotBissect(distance: (campos - newPoint).magnitude, iteration: i, point:newPoint)) { continue; } // If dont generate then dont
 
                         // if we dont care about camera distance and that ALL triangles are cut in half then we woudn't need an dict to find out if point have been created , we know if it have been or not depending if we are in the first or second half of the loop
                         // and the place of the point is also easy to find 
@@ -94,13 +77,13 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                     // We need to destroy (write over 1) the old triangle and add 2 new triangles (add 1) 
                     Triangles.Add(     new Triangle { Index0 = Triangles[index].Index1, Index1 = Triangles[index].Index2, Index2 = (short)p });
                     Triangles[index] = new Triangle { Index1 = Triangles[index].Index0, Index0 = Triangles[index].Index2, Index2 = (short)p };
-
+                        
                 }
             }
             
         }
 
-        private bool doNotBissect(float distance, int iteration, Vector3 point)
+        private bool DoNotBissect(float distance, int iteration, Vector3 point)
         {
             // Return True if point is on the backside of the planet
             if (((math.dot(campos, point) < backsideLimit) && (iteration >= backsideIterations))) { return true; }  // backsideLimit default is 0 or maybe something like -0.1 
@@ -124,7 +107,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
 
         private Vector3 CreateMiddlePoint(float3 a, float3 b)
         {
-            return changeHeight(math.normalize((a + b) / 2));
+            return ChangeHeight(math.normalize((a + b) / 2));
         }
 
         private float PerlinNoise3D(float3 point)
@@ -132,7 +115,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
             return (Mathf.PerlinNoise(point.x, point.y) + Mathf.PerlinNoise(point.y, point.x) + Mathf.PerlinNoise(point.z, point.y) + Mathf.PerlinNoise(point.y, point.z) + Mathf.PerlinNoise(point.z, point.x) + Mathf.PerlinNoise(point.x, point.z)) / 6;
         }
 
-        private float3 changeHeight(float3 point)
+        private float3 ChangeHeight(float3 point)
         {
             float noiseToAdd = 0;
             float r = roughtness;
@@ -146,7 +129,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
                 c += centerOffset; // change of center -> its acttualy more of a sample point , this change could be done in other ways
             }
             noiseToAdd = Mathf.Max(0, noiseToAdd - floorheight); // set changes to 0 if they are not big enoth (result in a "ground" layer , an ocean floor)
-            return (noiseToAdd + 1) * Vector3.Normalize(point) * Radius;
+            return (noiseToAdd + 1) * Radius * Vector3.Normalize(point);
         }
     }
 }
