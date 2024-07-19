@@ -14,6 +14,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
     // This class is only for testing, it isn't ECS and also not a proper unit test
     public class PlanetMeshGenerationTest : MonoBehaviour
     {
+        public bool isWater;
         public Material Material;
         public Shader debugShader;
         public bool ShaderOrMaterial;
@@ -44,7 +45,6 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
         public float overhorizonLimit2;
 
         public float radius;
-        public GameObject water;
         public Parameters parameter;
 
         private NativeList<int> renderIterations;
@@ -99,7 +99,9 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             previewGameObjects = new GameObject[(int)(Math.Pow(2, chunks) * 12)];
             for (int i = 0; i < Math.Pow(2, chunks) *12 ; i++)
             {
-                previewGameObjects[i] = new GameObject(nameof(PlanetMeshGenerationTest));
+                if (isWater) { previewGameObjects[i] = new GameObject("Water Chunk"); }
+                else { previewGameObjects[i] = new GameObject("Land Chunk"); }
+                previewGameObjects[i].transform.parent = this.transform;
                 previewGameObjects[i].AddComponent<MeshFilter>();
                 previewGameObjects[i].AddComponent<MeshRenderer>();
                 triangless.Add( new NativeList<Triangle>(Allocator.Persistent));
@@ -148,7 +150,6 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             if (lastchunk != chunks) { OnDestroy(); Start(); }
             lastpos = cameraPosition.position;
             lastchunk = chunks;
-            water.GetComponent<Transform>().localScale = new Vector3(2.05f* radius, 2.05f * radius, 2.05f * radius);
 
             for (int i = 0; i < Math.Pow(2, chunks) * 12; i++)
             {
@@ -206,6 +207,9 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 
                 Radius = radius,
                 mp = float3.zero,
+
+                IsWater = isWater,
+                time = Time.time
             };
             job.Run();
 
@@ -260,6 +264,8 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
 
                     Radius = radius,
                     mp = mp,
+                    IsWater = isWater,
+                    time = Time.time
                 };
                 job.Run();
                 /*
@@ -417,6 +423,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets
             float r = parameter.roughtness;
             float s = parameter.strenght;
             float3 c = parameter.center;
+            if (isWater) { c.z += Time.time; }
             for (int i = 0; i < parameter.layernumber; i++)
             {
                 noiseToAdd += PerlinNoise3D(point * r + c) * s;

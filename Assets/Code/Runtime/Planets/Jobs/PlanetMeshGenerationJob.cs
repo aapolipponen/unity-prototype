@@ -10,6 +10,8 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
     [BurstCompile]
     public struct PlanetMeshGenerationJob : IJob
     {
+        public bool IsWater;
+        public float time;
         public NativeList<Vertex> Vertices;
         public NativeList<Triangle> Triangles;
         public NativeHashMap<float3, int> VertexToIndex;
@@ -121,6 +123,7 @@ namespace PLE.Prototype.Runtime.Code.Runtime.Planets.Jobs
             float r = roughtness;
             float s = strenght;
             float3 c = center;
+            if (IsWater) { c.z += time; }
             for (int i = 0; i < layernumber; i++)
             {
                 noiseToAdd += PerlinNoise3D(point * r + c) * s;
