@@ -4,21 +4,22 @@ using UnityEngine;
 
 public class OnRailBodyAuthoring : MonoBehaviour
 {
-    public float eccentricity =0 ; // Sharpness of orbit
-    public float inclination = 0; // RADIANS
-    public float semiMajorAxis = 1; // Distance Unit ? 
-    public float ascendingNodeLongitude = 0; // RADIANS
-    public float periapsisLongitude = 0; // PROBABLY RADIANS
+    public float eccentricity = 0;
+    public float inclination = 0; // Radians
+    public float semiMajorAxis = 1; // Unity units 
+    public float ascendingNodeLongitude = 0; // Radians
+    public float periapsisLongitude = 0; // Probably radians
     public float years = 1; // Duration of orbit
-    public float multiplier = 60*60*24*365.25f; // 1sec irl = 1year in simu
+    public float multiplier = 60 * 60 * 24 * 365.25f;
     public float epochMeanLongitude = 0; // Radians
-    private class Baker : Baker<OnRailBodyAuthoring>
-    {
 
+    public class Baker : Baker<OnRailBodyAuthoring>
+    {
         public override void Bake(OnRailBodyAuthoring authoring)
         {
-            Entity entity = GetEntity(TransformUsageFlags.Dynamic);
-            AddComponent(entity, new OnRailBodyComponent() {
+            var entity = GetEntity(TransformUsageFlags.Dynamic);
+            AddComponent(entity, new OnRailBodyComponent
+            {
                 multiplier = authoring.multiplier,
                 eccentricity = authoring.eccentricity,
                 inclination = authoring.inclination,
@@ -27,7 +28,7 @@ public class OnRailBodyAuthoring : MonoBehaviour
                 semiMajorAxis = authoring.semiMajorAxis,
                 years = authoring.years,
                 epochMeanLongitude = authoring.epochMeanLongitude
-            }) ;
+            });
         }
     }
 }

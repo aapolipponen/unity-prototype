@@ -14,59 +14,65 @@ public partial struct OnRailBodySystem : ISystem
         
         foreach ((RefRW< LocalTransform> localTransform, RefRW<OnRailBodyComponent> onRailBodyComponent) in SystemAPI.Query<RefRW<LocalTransform>, RefRW<OnRailBodyComponent>>())
         {
-            //https://space.stackexchange.com/questions/8911/determining-orbital-position-at-a-future-point-in-time
-            //https://ssd.jpl.nasa.gov/planets/approx_pos.html
+            // Some rescoures
+            // https://space.stackexchange.com/questions/8911/determining-orbital-position-at-a-future-point-in-time
+            // https://ssd.jpl.nasa.gov/planets/approx_pos.html
 
-            // PARAMETERS (DO NOT CHANGE OVER TIME)(but you can if you want)
-            float L0 = onRailBodyComponent.ValueRO.epochMeanLongitude; // Mean longitude at epoch T0 (Where the planet start)
-            float p = onRailBodyComponent.ValueRO.periapsisLongitude;// Longitude of periapsis (Where the closest point to the star* is)
-            float W = onRailBodyComponent.ValueRO.ascendingNodeLongitude;// Longitude of the ascending node (Where it goes up ? For inclination!=0)
-            float e = onRailBodyComponent.ValueRO.eccentricity;// Eccentricity (Sharpness of orbit)
-            float a = onRailBodyComponent.ValueRO.semiMajorAxis;// Semi-major axis (Average Radius (in some way))
-            float i = onRailBodyComponent.ValueRO.inclination;// Inclination
-            
-            // https://en.wikipedia.org/wiki/Mean_motion
-            float n = (2*Mathf.PI) / onRailBodyComponent.ValueRO.years;  // Meean motion = Revolution / Time
+            float meanLongitudeAtEpoch = onRailBodyComponent.ValueRO.epochMeanLongitude; // Mean longitude at epoch T0
+            float periapsisLongitude = onRailBodyComponent.ValueRO.periapsisLongitude; // Longitude of periapsis
+            float ascendingNodeLongitude = onRailBodyComponent.ValueRO.ascendingNodeLongitude; // Longitude of the ascending node
+            float eccentricity = onRailBodyComponent.ValueRO.eccentricity; // Orbital eccentricity
+            float semiMajorAxis = onRailBodyComponent.ValueRO.semiMajorAxis; // Semi-major axis
+            float inclination = onRailBodyComponent.ValueRO.inclination; // Orbital inclination
 
-            //https://en.wikipedia.org/wiki/Mean_longitude
+            // Mean motion: Revolution / Time
+            float meanMotion = (2 * Mathf.PI) / onRailBodyComponent.ValueRO.years;
+
+            // Update time and calculate mean longitude
             onRailBodyComponent.ValueRW.time += Time.deltaTime * onRailBodyComponent.ValueRO.multiplier;
-            float L = (L0 + n * (onRailBodyComponent.ValueRO.time/(3600*24*365.25f)))%360; //Mean longitude = Longitude at T0 + Mean motion * Time
+            float meanLongitude = (meanLongitudeAtEpoch + meanMotion * (onRailBodyComponent.ValueRO.time / (3600 * 24 * 365.25f))) % 360;
 
-            // Everything underhere basicly comme from  https://space.stackexchange.com/questions/8911/determining-orbital-position-at-a-future-point-in-time
-            var M = L - p; //Mean anomaly
-            var w = p - W; //Argument of periapsis
+            // Calculate mean anomaly
+            float meanAnomaly = meanLongitude - periapsisLongitude;
 
-            // Solve M = E - ( e * sin(E) ) with M mean anomaly, https://www.met.reading.ac.uk/~ross/Documents/OrbitNotes.pdf
-            var E = M;
-            // E=M is a commun initial guess , and it is recommended to have good ones especialy for high eccentricity , 
-            // (We could add a variable in the component to store previous E if need (Idk if there's realy the need))
-            int t = 0;
+            // Calculate argument of periapsis with mean anomaly, https://www.met.reading.ac.uk/~ross/Documents/OrbitNotes.pdf
+            float argumentOfPeriapsis = periapsisLongitude - ascendingNodeLongitude;
+
+            // Everything under here basically comes from https://space.stackexchange.com/questions/8911/determining-orbital-position-at-a-future-point-in-time
+
+            // A common inital guess for eccentricity (A circular orbit)
+            var eccentricAnomaly = meanAnomaly;
+            
+            // Numerically solve Kepler's equation using the Newton-Raphson method
+            int iteration = 0;
             while (true)
             {
-                var dE = (E - e * Mathf.Sin(E) - M) / (1 - e * Mathf.Cos(E)); // cos vax -1 a 1 
-                E -= dE;
-                t++;
-                if (Mathf.Abs(dE) < 1e-5) {break;}
-                if (t > 10) {break;} // prevent infinit loop (if we dont add this we need to add more tolerance (1e-5 <- 1e-4) (It was original 1e-6)
-                // The more eccentric orbits are the the more iterations it will need or dE sometimes may never go below 1e-5
-                //
+                float deltaEccentricAnomaly = (eccentricAnomaly - eccentricity * Mathf.Sin(eccentricAnomaly) - meanAnomaly) / (1 - eccentricity * Mathf.Cos(eccentricAnomaly));
+                eccentricAnomaly -= deltaEccentricAnomaly;
+                iteration++;
+                if (Mathf.Abs(deltaEccentricAnomaly) < 1e-5) break;
+                if (iteration > 10) break; // Prevent infinite loop
             }
-            // (P and Q form a 2d coordinate system in the plane of the orbit, with +P pointing towards periapsis.)
-            var P = a * (Mathf.Cos(E) - e);
-            var Q = a * Mathf.Sin(E) * Mathf.Sqrt(1 - Mathf.Pow(e, 2));
-            // rotate by argument of periapsis
-            var x = Mathf.Cos(w) * P - Mathf.Sin(w) * Q;
-            var y = Mathf.Sin(w) * P + Mathf.Cos(w) * Q;
-            // rotate by inclination
-            var z = Mathf.Sin(i) * y;
-            y = Mathf.Cos(i) * y;
-            // rotate by longitude of ascending node
-            var xtemp = x;
-            x = Mathf.Cos(W) * xtemp - Mathf.Sin(W) * y;
-            y = Mathf.Sin(W) * xtemp + Mathf.Cos(W) * y;
-            localTransform.ValueRW.Position=new float3(x,z , y ); // This of course need to be changed later (1000 is here to make bigger orbits at the scale i'm working im my demotest thing)
-        }
-        
 
+            // Calculate position in the orbital plane (P and Q are 2D coordinates)
+            float P = semiMajorAxis * (Mathf.Cos(eccentricAnomaly) - eccentricity);
+            float Q = semiMajorAxis * Mathf.Sin(eccentricAnomaly) * Mathf.Sqrt(1 - Mathf.Pow(eccentricity, 2));
+
+            // Rotate by argument of periapsis
+            float xOrbitalPlane = Mathf.Cos(argumentOfPeriapsis) * P - Mathf.Sin(argumentOfPeriapsis) * Q;
+            float yOrbitalPlane = Mathf.Sin(argumentOfPeriapsis) * P + Mathf.Cos(argumentOfPeriapsis) * Q;
+
+            // Apply inclination rotation
+            float z = Mathf.Sin(inclination) * yOrbitalPlane;
+            float yInclination = Mathf.Cos(inclination) * yOrbitalPlane;
+
+            // Rotate by longitude of ascending node
+            float xTemp = xOrbitalPlane;
+            float x = Mathf.Cos(ascendingNodeLongitude) * xTemp - Mathf.Sin(ascendingNodeLongitude) * yInclination;
+            float y = Mathf.Sin(ascendingNodeLongitude) * xTemp + Mathf.Cos(ascendingNodeLongitude) * yInclination;
+
+            // Update the position of the body
+            localTransform.ValueRW.Position = new float3(x, y, z);
+        }        
     }
 }
